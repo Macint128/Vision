@@ -2,40 +2,56 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <title>손만 따서 띄우기</title>
+  <title>핀치로 아이콘 끌기</title>
   <style>
     html, body {
       margin: 0;
       padding: 0;
-      overflow: hidden;
       background: black;
-    }
-
-    video {
-      display: none;
+      overflow: hidden;
     }
 
     #hand-canvas {
       position: absolute;
       top: 0;
       left: 0;
-      z-index: 2;
+      z-index: 1;
       pointer-events: none;
+    }
+
+    .icon {
+      position: absolute;
+      width: 80px;
+      height: 80px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      color: white;
+      z-index: 10;
+      cursor: grab;
     }
   </style>
 </head>
 <body>
 
-  <video id="input_video" autoplay playsinline muted></video>
+  <video id="input_video" autoplay playsinline muted style="display:none;"></video>
   <canvas id="hand-canvas"></canvas>
+  <div id="icon" class="icon">📦</div>
 
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
   <script>
-    const videoElement = document.getElementById('input_video');
-    const handCanvas = document.getElementById('hand-canvas');
-    const handCtx = handCanvas.getContext('2d');
+    const video = document.getElementById('input_video');
+    const canvas = document.getElementById('hand-canvas');
+    const ctx = canvas.getContext('2d');
+    const icon = document.getElementById('icon');
+
+    let isGrabbing = false;
 
     const hands = new Hands({
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
@@ -45,59 +61,62 @@
       maxNumHands: 1,
       modelComplexity: 1,
       minDetectionConfidence: 0.7,
-      minTrackingConfidence: 0.5
+      minTrackingConfidence: 0.7
     });
 
     hands.onResults((results) => {
-      if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) return;
+      if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+        icon.style.display = "none";
+        return;
+      }
 
       const landmarks = results.multiHandLandmarks[0];
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
 
-      const vw = videoElement.videoWidth;
-      const vh = videoElement.videoHeight;
-      handCanvas.width = vw;
-      handCanvas.height = vh;
+      canvas.width = vw;
+      canvas.height = vh;
 
-      handCtx.clearRect(0, 0, vw, vh);
+      ctx.clearRect(0, 0, vw, vh);
 
-      // 손 마스크 만들기
-      handCtx.save();
+      // 손 들어오면 아이콘 보이기
+      icon.style.display = "flex";
 
-      handCtx.beginPath();
-      const outline = [0, 5, 9, 13, 17, 0]; // 대략적인 손 윤곽
-      outline.forEach((i, idx) => {
-        const pt = landmarks[i];
-        const x = pt.x * vw;
-        const y = pt.y * vh;
-        if (idx === 0) handCtx.moveTo(x, y);
-        else handCtx.lineTo(x, y);
-      });
-      handCtx.closePath();
+      const thumb = landmarks[4];  // 엄지 끝
+      const index = landmarks[8];  // 검지 끝
 
-      // 부드러운 마스크
-      handCtx.shadowColor = 'black';
-      handCtx.shadowBlur = 30;
-      handCtx.fillStyle = 'white';
-      handCtx.fill();
+      const thumbX = thumb.x * vw;
+      const thumbY = thumb.y * vh;
+      const indexX = index.x * vw;
+      const indexY = index.y * vh;
 
-      // 영상에서 손 부분만 남기기
-      handCtx.globalCompositeOperation = 'source-in';
-      handCtx.drawImage(videoElement, 0, 0, vw, vh);
+      const dx = thumbX - indexX;
+      const dy = thumbY - indexY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
 
-      handCtx.restore();
+      // 핀치 상태: 일정 거리 이하
+      if (distance < 40) {
+        isGrabbing = true;
+      } else {
+        isGrabbing = false;
+      }
+
+      // 아이콘 이동
+      if (isGrabbing) {
+        icon.style.left = (indexX - 40) + 'px';
+        icon.style.top = (indexY - 40) + 'px';
+      }
     });
 
-    const camera = new Camera(videoElement, {
+    const camera = new Camera(video, {
       onFrame: async () => {
-        await hands.send({ image: videoElement });
+        await hands.send({ image: video });
       },
       width: 1280,
       height: 720,
-      facingMode: 'environment' // 후면 카메라
+      facingMode: 'environment'
     });
-
     camera.start();
   </script>
-
 </body>
 </html>
