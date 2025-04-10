@@ -1,39 +1,100 @@
 <!DOCTYPE html>
-<html>
+<html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <title>iOS 후면 카메라 테스트</title>
+  <meta charset="UTF-8" />
+  <title>Vision OS 스타일 손 추적 앱</title>
   <style>
-    body, html {
-      margin: 0; padding: 0;
-      height: 100%;
+    html, body {
+      margin: 0;
+      padding: 0;
       overflow: hidden;
+      height: 100%;
       background: black;
     }
+
     video {
-      width: 100vw;
-      height: 100vh;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      height: 100%;
+      transform: translate(-50%, -50%);
       object-fit: cover;
+      z-index: 1;
+    }
+
+    #app-icon {
+      position: absolute;
+      width: 80px;
+      height: 80px;
+      background: rgba(255, 255, 255, 0.15);
+      border: 2px solid rgba(255,255,255,0.5);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
+      color: white;
+      z-index: 2;
+      transition: transform 0.1s ease;
     }
   </style>
 </head>
 <body>
 
-  <video id="video" autoplay playsinline muted></video>
+  <video id="input_video" autoplay playsinline muted></video>
+  <div id="app-icon">📱</div>
+
+  <!-- MediaPipe Hands -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
   <script>
-    const video = document.getElementById("video");
+    const videoElement = document.getElementById('input_video');
+    const appIcon = document.getElementById('app-icon');
 
-    navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment" }
-    })
-    .then((stream) => {
-      video.srcObject = stream;
-    })
-    .catch((err) => {
-      alert("카메라 접근 실패: " + err.message);
+    // 앱 아이콘 위치 업데이트 함수
+    function moveAppTo(x, y) {
+      appIcon.style.left = `${x - 40}px`; // 아이콘 중심 맞추기
+      appIcon.style.top = `${y - 40}px`;
+    }
+
+    // 손 인식 설정
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
     });
-  </script>
 
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.5
+    });
+
+    hands.onResults((results) => {
+      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        const landmarks = results.multiHandLandmarks[0];
+        const wrist = landmarks[0]; // 손목 좌표 기준
+
+        // 비디오 해상도 기준 좌표 → 화면 좌표로 매핑
+        const x = wrist.x * videoElement.videoWidth;
+        const y = wrist.y * videoElement.videoHeight;
+
+        moveAppTo(x, y);
+      }
+    });
+
+    // 카메라 연결
+    const camera = new Camera(videoElement, {
+      onFrame: async () => {
+        await hands.send({ image: videoElement });
+      },
+      width: 1280,
+      height: 720,
+      facingMode: "environment" // 후면 카메라
+    });
+
+    camera.start();
+  </script>
 </body>
 </html>
