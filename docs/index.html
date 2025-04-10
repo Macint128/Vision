@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>iOS 후면 카메라 강제</title>
+  <title>VisionOS 스타일 핸드 트래킹</title>
   <style>
     html, body {
       margin: 0; padding: 0;
@@ -10,6 +10,7 @@
       overflow: hidden;
       background: black;
     }
+
     video {
       width: 100vw;
       height: 100vh;
@@ -17,53 +18,144 @@
       position: absolute;
       z-index: 0;
     }
-    #start-btn {
+
+    #power-btn {
       position: absolute;
-      top: 50%;
+      bottom: 40px;
       left: 50%;
-      transform: translate(-50%, -50%);
-      padding: 16px 32px;
-      font-size: 20px;
-      background: rgba(255,255,255,0.2);
+      transform: translateX(-50%);
+      width: 80px;
+      height: 80px;
+      background: rgba(255,255,255,0.1);
+      border: 2px solid rgba(255,255,255,0.4);
+      border-radius: 50%;
+      backdrop-filter: blur(12px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
       color: white;
-      border: 2px solid white;
-      border-radius: 12px;
-      backdrop-filter: blur(10px);
       cursor: pointer;
       z-index: 10;
+      transition: background 0.3s ease;
+    }
+
+    #power-btn:hover {
+      background: rgba(255,255,255,0.2);
+    }
+
+    #app-icon {
+      position: absolute;
+      width: 100px;
+      height: 100px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 24px;
+      backdrop-filter: blur(20px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      color: white;
+      z-index: 5;
+      transition: transform 0.2s ease;
     }
   </style>
 </head>
 <body>
 
   <video id="video" autoplay playsinline muted></video>
-  <button id="start-btn">📸 카메라 시작</button>
+  <div id="power-btn">⏻</div>
+  <div id="app-icon">📱</div>
+
+  <!-- Mediapipe Hands -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
   <script>
     const video = document.getElementById("video");
-    const button = document.getElementById("start-btn");
+    const powerBtn = document.getElementById("power-btn");
+    const appIcon = document.getElementById("app-icon");
 
-    button.addEventListener("click", async () => {
-      button.style.display = "none";
+    let cameraOn = false;
+    let dragging = false;
+
+    powerBtn.addEventListener("click", async () => {
+      if (cameraOn) return;
+      cameraOn = true;
+      powerBtn.style.display = "none";
 
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
         const backCam = devices.find(d =>
-          d.kind === "videoinput" &&
-          d.label.toLowerCase().includes("back")
+          d.kind === "videoinput" && d.label.toLowerCase().includes("back")
         );
 
         const stream = await navigator.mediaDevices.getUserMedia({
           video: backCam
             ? { deviceId: { exact: backCam.deviceId } }
-            : { facingMode: { exact: "environment" } } // fallback
+            : { facingMode: { exact: "environment" } }
         });
 
         video.srcObject = stream;
+
+        // Mediapipe Hands 초기화
+        const hands = new Hands({
+          locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+          maxNumHands: 1,
+          modelComplexity: 1,
+          minDetectionConfidence: 0.7,
+          minTrackingConfidence: 0.7
+        });
+
+        hands.onResults(onResults);
+
+        const cam = new Camera(video, {
+          onFrame: async () => {
+            await hands.send({ image: video });
+          },
+          width: 1280,
+          height: 720
+        });
+        cam.start();
+
       } catch (err) {
         alert("카메라 접근 실패: " + err.message);
       }
     });
+
+    function onResults(results) {
+      if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) return;
+
+      const landmarks = results.multiHandLandmarks[0];
+
+      const index = landmarks[8];
+      const thumb = landmarks[4];
+
+      // 손끝 좌표 (비율)
+      const x = index.x;
+      const y = index.y;
+
+      // 핀치 감지 (엄지와 검지 거리)
+      const dx = index.x - thumb.x;
+      const dy = index.y - thumb.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < 0.05) { // 🤏 핀치
+        dragging = true;
+      } else {
+        dragging = false;
+      }
+
+      if (dragging) {
+        const screenX = window.innerWidth * x;
+        const screenY = window.innerHeight * y;
+
+        appIcon.style.transform = `translate(${screenX - 50}px, ${screenY - 50}px)`;
+      }
+    }
   </script>
 
 </body>
