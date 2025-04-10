@@ -2,13 +2,12 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <title>Vision OS 스타일 핀치 인터랙션</title>
+  <title>VisionOS Hand Layer</title>
   <style>
     html, body {
       margin: 0;
       padding: 0;
       overflow: hidden;
-      height: 100%;
       background: black;
     }
 
@@ -20,6 +19,14 @@
       transform: translate(-50%, -50%);
       object-fit: cover;
       z-index: 1;
+    }
+
+    #hand-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 2;
+      pointer-events: none;
     }
 
     #app-icon {
@@ -35,28 +42,57 @@
       justify-content: center;
       font-size: 36px;
       color: white;
-      z-index: 2;
-      transition: transform 0.1s ease;
+      z-index: 3;
       pointer-events: none;
+      transition: transform 0.1s ease;
     }
   </style>
 </head>
 <body>
 
   <video id="input_video" autoplay playsinline muted></video>
+  <canvas id="hand-canvas"></canvas>
   <div id="app-icon">📱</div>
 
-  <!-- MediaPipe Hands -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
   <script>
     const videoElement = document.getElementById('input_video');
+    const handCanvas = document.getElementById('hand-canvas');
+    const handCtx = handCanvas.getContext('2d');
     const appIcon = document.getElementById('app-icon');
 
-    // 임계값: 엄지-검지 거리 (0~1 비율에서 0.05 정도면 핀치 느낌)
     const pinchThreshold = 0.05;
     let isPinching = false;
+
+    function drawHandMask(landmarks) {
+      handCanvas.width = videoElement.videoWidth;
+      handCanvas.height = videoElement.videoHeight;
+
+      handCtx.clearRect(0, 0, handCanvas.width, handCanvas.height);
+
+      // 비디오 이미지에서 전체 프레임 그리기
+      handCtx.drawImage(videoElement, 0, 0, handCanvas.width, handCanvas.height);
+
+      // 마스크 그리기
+      handCtx.globalCompositeOperation = 'destination-in';
+      handCtx.beginPath();
+
+      // 손바닥 중심 영역
+      const palmIdx = [0, 5, 9, 13, 17];
+      palmIdx.forEach((i, idx) => {
+        const pt = landmarks[i];
+        const x = pt.x * handCanvas.width;
+        const y = pt.y * handCanvas.height;
+        if (idx === 0) handCtx.moveTo(x, y);
+        else handCtx.lineTo(x, y);
+      });
+      handCtx.closePath();
+      handCtx.fill();
+
+      handCtx.globalCompositeOperation = 'source-over';
+    }
 
     const hands = new Hands({
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
@@ -70,34 +106,32 @@
     });
 
     hands.onResults((results) => {
-      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-        const landmarks = results.multiHandLandmarks[0];
-        const videoW = videoElement.videoWidth;
-        const videoH = videoElement.videoHeight;
+      if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) return;
 
-        const index = landmarks[8];  // 검지 끝
-        const thumb = landmarks[4];  // 엄지 끝
+      const landmarks = results.multiHandLandmarks[0];
+      drawHandMask(landmarks);
 
-        // 손끝 좌표 계산
-        const x = index.x * videoW;
-        const y = index.y * videoH;
+      const videoW = videoElement.videoWidth;
+      const videoH = videoElement.videoHeight;
 
-        // 거리 계산
-        const dx = index.x - thumb.x;
-        const dy = index.y - thumb.y;
-        const distance = Math.sqrt(dx*dx + dy*dy);
+      const index = landmarks[8];  // 검지
+      const thumb = landmarks[4];  // 엄지
 
-        // 핀치 감지
-        const currentlyPinching = distance < pinchThreshold;
+      const ix = index.x * videoW;
+      const iy = index.y * videoH;
 
-        if (currentlyPinching) {
-          // 핀치 중이면 앱 따라다님
-          appIcon.style.left = `${x - 40}px`;
-          appIcon.style.top = `${y - 40}px`;
-        }
+      const dx = index.x - thumb.x;
+      const dy = index.y - thumb.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
 
-        isPinching = currentlyPinching;
+      const currentlyPinching = distance < pinchThreshold;
+
+      if (currentlyPinching) {
+        appIcon.style.left = `${ix - 40}px`;
+        appIcon.style.top = `${iy - 40}px`;
       }
+
+      isPinching = currentlyPinching;
     });
 
     const camera = new Camera(videoElement, {
