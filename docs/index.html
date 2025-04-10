@@ -68,8 +68,13 @@
           appIcon.style.left = `${data.x - 40}px`;
           appIcon.style.top = `${data.y - 40}px`;
         }
-      }).begin();
+      });
+      webgazer.showVideo(false);       // 전면 카메라 영상 숨기기
+      webgazer.showFaceOverlay(false); // 얼굴 프레임도 숨김
+      webgazer.showFaceFeedbackBox(false); // 피드백 박스도 숨김
+      webgazer.begin();
     });
+
 
     // 2. 후면 카메라: 화면 출력 + 손 추적용
     navigator.mediaDevices.getUserMedia({
