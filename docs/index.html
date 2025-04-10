@@ -102,14 +102,14 @@
         const hands = new Hands({
           locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
         });
-
+        
         hands.setOptions({
           maxNumHands: 1,
           modelComplexity: 1,
           minDetectionConfidence: 0.7,
-          minTrackingConfidence: 0.7
+          minTrackingConfidence: 0.7,
+          selfieMode: false  // 👈 이 줄 추가!
         });
-
         hands.onResults(onResults);
 
         const cam = new Camera(video, {
