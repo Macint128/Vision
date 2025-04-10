@@ -57,7 +57,9 @@
       font-size: 32px;
       color: white;
       z-index: 5;
-      transition: transform 0.2s ease;
+      transition: transform 0.15s ease-out;
+      left: calc(50% - 50px);
+      top: calc(50% - 50px);
     }
   </style>
 </head>
@@ -83,67 +85,72 @@
       if (cameraOn) return;
       cameraOn = true;
       powerBtn.style.display = "none";
+      await startCamera();
+      initHandTracking();
+    });
 
+    async function startCamera() {
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
-        const backCam = devices.find(d =>
-          d.kind === "videoinput" && d.label.toLowerCase().includes("back")
+        const backCam = devices.find(device =>
+          device.kind === "videoinput" &&
+          device.label.toLowerCase().includes("back")
         );
 
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: backCam
-            ? { deviceId: { exact: backCam.deviceId } }
-            : { facingMode: { exact: "environment" } }
-        });
+        const constraints = backCam
+          ? { video: { deviceId: { exact: backCam.deviceId } } }
+          : { video: { facingMode: { exact: "environment" } } };
 
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
         video.srcObject = stream;
-
-        // Mediapipe Hands 초기화
-        const hands = new Hands({
-          locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-        });
-        
-        hands.setOptions({
-          maxNumHands: 1,
-          modelComplexity: 1,
-          minDetectionConfidence: 0.7,
-          minTrackingConfidence: 0.7,
-          selfieMode: false  // 👈 이 줄 추가!
-        });
-        hands.onResults(onResults);
-
-        const cam = new Camera(video, {
-          onFrame: async () => {
-            await hands.send({ image: video });
-          },
-          width: 1280,
-          height: 720
-        });
-        cam.start();
-
       } catch (err) {
         alert("카메라 접근 실패: " + err.message);
       }
-    });
+    }
+
+    function initHandTracking() {
+      const hands = new Hands({
+        locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+      });
+
+      hands.setOptions({
+        maxNumHands: 1,
+        modelComplexity: 1,
+        minDetectionConfidence: 0.7,
+        minTrackingConfidence: 0.7,
+        selfieMode: false // 후면 카메라용
+      });
+
+      hands.onResults(onResults);
+
+      const cam = new Camera(video, {
+        onFrame: async () => {
+          await hands.send({ image: video });
+        },
+        width: 1280,
+        height: 720
+      });
+
+      cam.start();
+    }
 
     function onResults(results) {
       if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) return;
 
       const landmarks = results.multiHandLandmarks[0];
+      const index = landmarks[8]; // 검지 끝
+      const thumb = landmarks[4]; // 엄지 끝
 
-      const index = landmarks[8];
-      const thumb = landmarks[4];
-
-      // 손끝 좌표 (비율)
       const x = index.x;
       const y = index.y;
 
-      // 핀치 감지 (엄지와 검지 거리)
       const dx = index.x - thumb.x;
       const dy = index.y - thumb.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
-      if (dist < 0.05) { // 🤏 핀치
+      const isPinching = dist < 0.05;
+
+      if (isPinching) {
         dragging = true;
       } else {
         dragging = false;
