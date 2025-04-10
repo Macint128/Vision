@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <title>VisionOS Hand Layer</title>
+  <title>손만 따서 띄우기</title>
   <style>
     html, body {
       margin: 0;
@@ -12,13 +12,7 @@
     }
 
     video {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      height: 100%;
-      transform: translate(-50%, -50%);
-      object-fit: cover;
-      z-index: 1;
+      display: none;
     }
 
     #hand-canvas {
@@ -28,31 +22,12 @@
       z-index: 2;
       pointer-events: none;
     }
-
-    #app-icon {
-      position: absolute;
-      width: 80px;
-      height: 80px;
-      background: rgba(255, 255, 255, 0.15);
-      border: 2px solid rgba(255,255,255,0.5);
-      backdrop-filter: blur(10px);
-      border-radius: 20px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 36px;
-      color: white;
-      z-index: 3;
-      pointer-events: none;
-      transition: transform 0.1s ease;
-    }
   </style>
 </head>
 <body>
 
   <video id="input_video" autoplay playsinline muted></video>
   <canvas id="hand-canvas"></canvas>
-  <div id="app-icon">📱</div>
 
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
@@ -61,42 +36,6 @@
     const videoElement = document.getElementById('input_video');
     const handCanvas = document.getElementById('hand-canvas');
     const handCtx = handCanvas.getContext('2d');
-    const appIcon = document.getElementById('app-icon');
-
-    const pinchThreshold = 0.05;
-    let isPinching = false;
-
-    function drawHandMask(landmarks) {
-      handCanvas.width = videoElement.videoWidth;
-      handCanvas.height = videoElement.videoHeight;
-    
-      handCtx.clearRect(0, 0, handCanvas.width, handCanvas.height);
-      handCtx.save();
-    
-      // 손 마스크용 경로 만들기
-      handCtx.beginPath();
-      const palmIdx = [0, 5, 9, 13, 17, 0];
-      palmIdx.forEach((i, idx) => {
-        const pt = landmarks[i];
-        const x = pt.x * handCanvas.width;
-        const y = pt.y * handCanvas.height;
-        if (idx === 0) handCtx.moveTo(x, y);
-        else handCtx.lineTo(x, y);
-      });
-      handCtx.closePath();
-    
-      // 부드러운 마스킹
-      handCtx.shadowColor = "black";
-      handCtx.shadowBlur = 40;
-      handCtx.fillStyle = "#fff";
-      handCtx.fill();
-    
-      handCtx.globalCompositeOperation = "source-in";
-      handCtx.drawImage(videoElement, 0, 0, handCanvas.width, handCanvas.height);
-    
-      handCtx.restore();
-    }
-
 
     const hands = new Hands({
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
@@ -113,29 +52,39 @@
       if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) return;
 
       const landmarks = results.multiHandLandmarks[0];
-      drawHandMask(landmarks);
 
-      const videoW = videoElement.videoWidth;
-      const videoH = videoElement.videoHeight;
+      const vw = videoElement.videoWidth;
+      const vh = videoElement.videoHeight;
+      handCanvas.width = vw;
+      handCanvas.height = vh;
 
-      const index = landmarks[8];  // 검지
-      const thumb = landmarks[4];  // 엄지
+      handCtx.clearRect(0, 0, vw, vh);
 
-      const ix = index.x * videoW;
-      const iy = index.y * videoH;
+      // 손 마스크 만들기
+      handCtx.save();
 
-      const dx = index.x - thumb.x;
-      const dy = index.y - thumb.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      handCtx.beginPath();
+      const outline = [0, 5, 9, 13, 17, 0]; // 대략적인 손 윤곽
+      outline.forEach((i, idx) => {
+        const pt = landmarks[i];
+        const x = pt.x * vw;
+        const y = pt.y * vh;
+        if (idx === 0) handCtx.moveTo(x, y);
+        else handCtx.lineTo(x, y);
+      });
+      handCtx.closePath();
 
-      const currentlyPinching = distance < pinchThreshold;
+      // 부드러운 마스크
+      handCtx.shadowColor = 'black';
+      handCtx.shadowBlur = 30;
+      handCtx.fillStyle = 'white';
+      handCtx.fill();
 
-      if (currentlyPinching) {
-        appIcon.style.left = `${ix - 40}px`;
-        appIcon.style.top = `${iy - 40}px`;
-      }
+      // 영상에서 손 부분만 남기기
+      handCtx.globalCompositeOperation = 'source-in';
+      handCtx.drawImage(videoElement, 0, 0, vw, vh);
 
-      isPinching = currentlyPinching;
+      handCtx.restore();
     });
 
     const camera = new Camera(videoElement, {
@@ -144,10 +93,11 @@
       },
       width: 1280,
       height: 720,
-      facingMode: "environment"
+      facingMode: 'environment' // 후면 카메라
     });
 
     camera.start();
   </script>
+
 </body>
 </html>
