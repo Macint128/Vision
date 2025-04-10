@@ -19,33 +19,34 @@
       height: 100vh;
       object-fit: cover;
       z-index: 1;
+      background: black;
     }
 
-  .glass-ui {
-    position: absolute;
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 9999; /* z-index 확실하게 높여줌 */
-    background: rgba(255, 255, 255, 0.2);
-    backdrop-filter: blur(12px);
-    padding: 20px;
-    border-radius: 16px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-  }
-  
-  .glass-ui button {
-    background: rgba(0, 0, 0, 0.6); /* 진한 배경 */
-    color: #fff; /* 흰 글씨 */
-    font-size: 16px;
-    border: none;
-    padding: 12px 20px;
-    margin: 5px;
-    border-radius: 12px;
-    cursor: pointer;
-    font-weight: bold;
-    backdrop-filter: blur(5px);
-  }
+    .glass-ui {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 9999;
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(10px);
+      padding: 20px;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    }
+
+    .glass-ui button {
+      background: rgba(0, 0, 0, 0.6);
+      color: #fff;
+      font-size: 16px;
+      border: none;
+      padding: 12px 20px;
+      margin: 5px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: bold;
+      backdrop-filter: blur(5px);
+    }
 
     video {
       display: none;
@@ -57,10 +58,10 @@
   <video id="input_video" autoplay playsinline></video>
   <canvas id="canvas"></canvas>
 
-<div class="glass-ui">
-  <button onclick="setBackground('mountain')">🏔️ 산 배경</button>
-  <button onclick="setBackground('clear')">❌ 배경 제거</button>
-</div>
+  <div class="glass-ui">
+    <button onclick="setBackground('mountain')">🏔️ 산 배경</button>
+    <button onclick="setBackground('clear')">❌ 배경 제거</button>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
@@ -74,19 +75,18 @@
     function setBackground(type) {
       if (type === 'mountain') {
         currentBg = new Image();
-        currentBg.src = 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=800&q=80'; // 산 이미지
+        currentBg.src = 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=800&q=80';
       } else {
         currentBg = null;
       }
     }
 
-    // MediaPipe Selfie Segmentation
     const selfieSegmentation = new SelfieSegmentation.SelfieSegmentation({
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
     });
 
     selfieSegmentation.setOptions({
-      modelSelection: 1 // 0: 빠른 모델, 1: 정밀 모델
+      modelSelection: 1
     });
 
     selfieSegmentation.onResults((results) => {
@@ -96,29 +96,30 @@
       canvasCtx.save();
       canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
-      // 배경 처리
       if (currentBg) {
         canvasCtx.drawImage(currentBg, 0, 0, canvasElement.width, canvasElement.height);
+        canvasCtx.globalCompositeOperation = 'destination-in';
+        canvasCtx.drawImage(results.segmentationMask, 0, 0, canvasElement.width, canvasElement.height);
+        canvasCtx.globalCompositeOperation = 'destination-over';
+        canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+      } else {
+        // 배경 제거 없이 그냥 영상만 표시
+        canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
       }
-
-      // segmentation mask 적용
-      canvasCtx.globalCompositeOperation = 'destination-in';
-      canvasCtx.drawImage(results.segmentationMask, 0, 0, canvasElement.width, canvasElement.height);
-      canvasCtx.globalCompositeOperation = 'destination-over';
-      canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
 
       canvasCtx.restore();
     });
 
-    // 카메라 연결
     const camera = new Camera(videoElement, {
       onFrame: async () => {
+        console.log('📷 프레임 들어옴'); // 상태 체크용 로그
         await selfieSegmentation.send({image: videoElement});
       },
       width: 1280,
       height: 720,
-      facingMode: { exact: "environment" } // 후면 카메라
+      facingMode: { ideal: "environment" } // 후면 우선, 안 되면 전면
     });
+
     camera.start();
   </script>
 
