@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <title>Vision OS 스타일 손 추적 앱</title>
+  <title>Vision OS 스타일 핀치 인터랙션</title>
   <style>
     html, body {
       margin: 0;
@@ -37,6 +37,7 @@
       color: white;
       z-index: 2;
       transition: transform 0.1s ease;
+      pointer-events: none;
     }
   </style>
 </head>
@@ -53,13 +54,10 @@
     const videoElement = document.getElementById('input_video');
     const appIcon = document.getElementById('app-icon');
 
-    // 앱 아이콘 위치 업데이트 함수
-    function moveAppTo(x, y) {
-      appIcon.style.left = `${x - 40}px`; // 아이콘 중심 맞추기
-      appIcon.style.top = `${y - 40}px`;
-    }
+    // 임계값: 엄지-검지 거리 (0~1 비율에서 0.05 정도면 핀치 느낌)
+    const pinchThreshold = 0.05;
+    let isPinching = false;
 
-    // 손 인식 설정
     const hands = new Hands({
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
     });
@@ -74,24 +72,41 @@
     hands.onResults((results) => {
       if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
         const landmarks = results.multiHandLandmarks[0];
-        const wrist = landmarks[0]; // 손목 좌표 기준
+        const videoW = videoElement.videoWidth;
+        const videoH = videoElement.videoHeight;
 
-        // 비디오 해상도 기준 좌표 → 화면 좌표로 매핑
-        const x = wrist.x * videoElement.videoWidth;
-        const y = wrist.y * videoElement.videoHeight;
+        const index = landmarks[8];  // 검지 끝
+        const thumb = landmarks[4];  // 엄지 끝
 
-        moveAppTo(x, y);
+        // 손끝 좌표 계산
+        const x = index.x * videoW;
+        const y = index.y * videoH;
+
+        // 거리 계산
+        const dx = index.x - thumb.x;
+        const dy = index.y - thumb.y;
+        const distance = Math.sqrt(dx*dx + dy*dy);
+
+        // 핀치 감지
+        const currentlyPinching = distance < pinchThreshold;
+
+        if (currentlyPinching) {
+          // 핀치 중이면 앱 따라다님
+          appIcon.style.left = `${x - 40}px`;
+          appIcon.style.top = `${y - 40}px`;
+        }
+
+        isPinching = currentlyPinching;
       }
     });
 
-    // 카메라 연결
     const camera = new Camera(videoElement, {
       onFrame: async () => {
         await hands.send({ image: videoElement });
       },
       width: 1280,
       height: 720,
-      facingMode: "environment" // 후면 카메라
+      facingMode: "environment"
     });
 
     camera.start();
