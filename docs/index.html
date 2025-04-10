@@ -69,18 +69,13 @@
     function drawHandMask(landmarks) {
       handCanvas.width = videoElement.videoWidth;
       handCanvas.height = videoElement.videoHeight;
-
+    
       handCtx.clearRect(0, 0, handCanvas.width, handCanvas.height);
-
-      // 비디오 이미지에서 전체 프레임 그리기
-      handCtx.drawImage(videoElement, 0, 0, handCanvas.width, handCanvas.height);
-
-      // 마스크 그리기
-      handCtx.globalCompositeOperation = 'destination-in';
+      handCtx.save();
+    
+      // 손 마스크용 경로 만들기
       handCtx.beginPath();
-
-      // 손바닥 중심 영역
-      const palmIdx = [0, 5, 9, 13, 17];
+      const palmIdx = [0, 5, 9, 13, 17, 0];
       palmIdx.forEach((i, idx) => {
         const pt = landmarks[i];
         const x = pt.x * handCanvas.width;
@@ -89,10 +84,19 @@
         else handCtx.lineTo(x, y);
       });
       handCtx.closePath();
+    
+      // 부드러운 마스킹
+      handCtx.shadowColor = "black";
+      handCtx.shadowBlur = 40;
+      handCtx.fillStyle = "#fff";
       handCtx.fill();
-
-      handCtx.globalCompositeOperation = 'source-over';
+    
+      handCtx.globalCompositeOperation = "source-in";
+      handCtx.drawImage(videoElement, 0, 0, handCanvas.width, handCanvas.height);
+    
+      handCtx.restore();
     }
+
 
     const hands = new Hands({
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
