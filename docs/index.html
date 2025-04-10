@@ -3,58 +3,151 @@
 <head>
   <meta charset="UTF-8">
   <title>VisionOS 스타일 웹</title>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://webgazer.cs.brown.edu/webgazer.js"></script>
   <style>
     body {
       margin: 0;
-      background: linear-gradient(135deg, #e0eafc, #cfdef3);
-      font-family: 'Helvetica Neue', sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      height: 100vh;
       overflow: hidden;
+      font-family: 'Helvetica Neue', sans-serif;
     }
 
-    .glass-card {
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(10px);
-      border-radius: 20px;
-      padding: 20px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-      margin-top: 20px;
-      width: 90%;
-      max-width: 400px;
-      text-align: center;
+    video#rearCamera {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+      z-index: -1;
     }
 
-    video {
-      width: 100%;
+    #app-icon {
+      position: absolute;
+      width: 80px;
+      height: 80px;
+      background: rgba(255, 255, 255, 0.3);
+      backdrop-filter: blur(8px);
       border-radius: 20px;
-      margin-top: 20px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      color: #333;
+      cursor: pointer;
+      transition: transform 0.2s;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
     }
   </style>
 </head>
 <body>
-  <div class="glass-card">
-    <h2>후면 카메라 뷰</h2>
-    <video id="camera" autoplay playsinline></video>
-  </div>
+
+  <video id="rearCamera" autoplay playsinline muted></video>
+  <video id="frontCamera" autoplay playsinline muted style="display: none;"></video>
+
+  <div id="app-icon">앱</div>
 
   <script>
-    const video = document.getElementById('camera');
+    const rearVideo = document.getElementById('rearCamera');
+    const frontVideo = document.getElementById('frontCamera');
+    const appIcon = document.getElementById('app-icon');
 
+    // 1. 전면 카메라: 눈동자 추적용
     navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: { exact: "environment" }
-      },
+      video: { facingMode: "user" },
       audio: false
-    })
-    .then(stream => {
-      video.srcObject = stream;
-    })
-    .catch(err => {
-      console.error("카메라 접근 실패:", err);
-      alert("후면 카메라에 접근할 수 없습니다 😢");
+    }).then(stream => {
+      frontVideo.srcObject = stream;
+      webgazer.setVideoElement(frontVideo);
+      webgazer.setGazeListener((data, time) => {
+        if (data) {
+          appIcon.style.left = `${data.x - 40}px`;
+          appIcon.style.top = `${data.y - 40}px`;
+        }
+      }).begin();
+    });
+
+    // 2. 후면 카메라: 화면 출력 + 손 추적용
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { exact: "environment" } },
+      audio: false
+    }).then(stream => {
+      rearVideo.srcObject = stream;
+
+      const rearCam = new Camera(rearVideo, {
+        onFrame: async () => {
+          await hands.send({ image: rearVideo });
+        },
+        width: 640,
+        height: 480
+      });
+
+      rearCam.start();
+    });
+
+    // 3. MediaPipe 손 추적
+    let pinchStartTime = null;
+    let isDragging = false;
+
+    const hands = new Hands({
+      locateFile: (file) =>
+        `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    });
+
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.5
+    });
+
+    function getDistance(a, b) {
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    }
+
+    hands.onResults((results) => {
+      if (results.multiHandLandmarks.length > 0) {
+        const landmarks = results.multiHandLandmarks[0];
+        const thumbTip = landmarks[4];
+        const indexTip = landmarks[8];
+
+        const distance = getDistance(thumbTip, indexTip);
+
+        if (distance < 0.05) {
+          if (!pinchStartTime) {
+            pinchStartTime = Date.now();
+          }
+
+          const duration = Date.now() - pinchStartTime;
+
+          if (duration > 2000 && !isDragging) {
+            isDragging = true;
+            console.log("👉 드래그 모드 진입");
+          }
+
+          if (isDragging) {
+            const x = (thumbTip.x + indexTip.x) / 2;
+            const y = (thumbTip.y + indexTip.y) / 2;
+            appIcon.style.left = `${window.innerWidth * x - 40}px`;
+            appIcon.style.top = `${window.innerHeight * y - 40}px`;
+          }
+
+        } else {
+          if (pinchStartTime) {
+            const duration = Date.now() - pinchStartTime;
+            if (duration < 2000) {
+              console.log("✅ 짧은 핀치 → 앱 실행");
+              alert("앱 실행!");
+            }
+            pinchStartTime = null;
+            isDragging = false;
+          }
+        }
+      }
     });
   </script>
 </body>
