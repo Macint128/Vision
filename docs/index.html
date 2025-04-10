@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <title>핀치로 아이콘 끌기</title>
+  <title>손에 가려지는 아이콘</title>
   <style>
     html, body {
       margin: 0;
@@ -11,35 +11,35 @@
       overflow: hidden;
     }
 
-    #hand-canvas {
+    video {
+      display: none;
+    }
+
+    canvas, .icon {
       position: absolute;
       top: 0;
       left: 0;
-      z-index: 1;
-      pointer-events: none;
     }
 
     .icon {
-      position: absolute;
+      z-index: 2;
       width: 80px;
       height: 80px;
+      background: white;
       border-radius: 20px;
-      background: rgba(255, 255, 255, 0.1);
-      backdrop-filter: blur(10px);
-      display: none;
+      display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 32px;
-      color: white;
-      z-index: 10;
-      cursor: grab;
+      font-size: 30px;
+      font-weight: bold;
+      transition: transform 0.15s ease-in-out;
     }
   </style>
 </head>
 <body>
 
-  <video id="input_video" autoplay playsinline muted style="display:none;"></video>
-  <canvas id="hand-canvas"></canvas>
+  <video id="input_video" autoplay playsinline muted></video>
+  <canvas id="mask-canvas"></canvas>
   <div id="icon" class="icon">📦</div>
 
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
@@ -47,11 +47,12 @@
 
   <script>
     const video = document.getElementById('input_video');
-    const canvas = document.getElementById('hand-canvas');
+    const canvas = document.getElementById('mask-canvas');
     const ctx = canvas.getContext('2d');
     const icon = document.getElementById('icon');
 
-    let isGrabbing = false;
+    let handCenter = { x: 0, y: 0 };
+    let iconPos = { x: 300, y: 300 };
 
     const hands = new Hands({
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
@@ -60,17 +61,11 @@
     hands.setOptions({
       maxNumHands: 1,
       modelComplexity: 1,
-      minDetectionConfidence: 0.7,
-      minTrackingConfidence: 0.7
+      minDetectionConfidence: 0.6,
+      minTrackingConfidence: 0.6
     });
 
     hands.onResults((results) => {
-      if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
-        icon.style.display = "none";
-        return;
-      }
-
-      const landmarks = results.multiHandLandmarks[0];
       const vw = video.videoWidth;
       const vh = video.videoHeight;
 
@@ -79,34 +74,46 @@
 
       ctx.clearRect(0, 0, vw, vh);
 
-      // 손 들어오면 아이콘 보이기
-      icon.style.display = "flex";
+      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        const landmarks = results.multiHandLandmarks[0];
 
-      const thumb = landmarks[4];  // 엄지 끝
-      const index = landmarks[8];  // 검지 끝
+        // 손 중심 좌표 계산 (대략 중지 아래)
+        const palmBase = landmarks[0];
+        handCenter.x = palmBase.x * vw;
+        handCenter.y = palmBase.y * vh;
 
-      const thumbX = thumb.x * vw;
-      const thumbY = thumb.y * vh;
-      const indexX = index.x * vw;
-      const indexY = index.y * vh;
+        // 마스킹: 손 영역 오려내기
+        ctx.save();
+        ctx.fillStyle = "black";
+        ctx.beginPath();
+        landmarks.forEach(pt => {
+          ctx.lineTo(pt.x * vw, pt.y * vh);
+        });
+        ctx.closePath();
 
-      const dx = thumbX - indexX;
-      const dy = thumbY - indexY;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fill(); // 배경 검정
 
-      // 핀치 상태: 일정 거리 이하
-      if (distance < 40) {
-        isGrabbing = true;
-      } else {
-        isGrabbing = false;
-      }
+        ctx.globalCompositeOperation = 'destination-out'; // 손 부분 오려내기
+        ctx.beginPath();
+        landmarks.forEach(pt => {
+          ctx.lineTo(pt.x * vw, pt.y * vh);
+        });
+        ctx.closePath();
+        ctx.fill();
 
-      // 아이콘 이동
-      if (isGrabbing) {
-        icon.style.left = (indexX - 40) + 'px';
-        icon.style.top = (indexY - 40) + 'px';
+        ctx.restore();
       }
     });
+
+    function animate() {
+      // 부드럽게 따라가기 (lerp)
+      iconPos.x += (handCenter.x - iconPos.x) * 0.15;
+      iconPos.y += (handCenter.y - iconPos.y) * 0.15;
+
+      icon.style.transform = `translate(${iconPos.x - 40}px, ${iconPos.y - 40}px)`;
+      requestAnimationFrame(animate);
+    }
 
     const camera = new Camera(video, {
       onFrame: async () => {
@@ -117,6 +124,8 @@
       facingMode: 'environment'
     });
     camera.start();
+    animate();
   </script>
+
 </body>
 </html>
