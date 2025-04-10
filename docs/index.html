@@ -1,61 +1,125 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <title>VisionOS 스타일 웹</title>
+  <meta charset="UTF-8" />
+  <title>Vision OS 스타일 누끼 앱</title>
   <style>
-    body {
+    html, body {
       margin: 0;
-      background: linear-gradient(135deg, #e0eafc, #cfdef3);
-      font-family: 'Helvetica Neue', sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      height: 100vh;
+      padding: 0;
       overflow: hidden;
+      height: 100%;
+      font-family: 'Helvetica Neue', sans-serif;
     }
 
-    .glass-card {
-      background: rgba(255, 255, 255, 0.2);
+    #canvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+      z-index: 1;
+    }
+
+    .glass-ui {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 2;
+      background: rgba(255, 255, 255, 0.1);
       backdrop-filter: blur(10px);
-      border-radius: 20px;
       padding: 20px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-      margin-top: 20px;
-      width: 90%;
-      max-width: 400px;
-      text-align: center;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    }
+
+    .glass-ui button {
+      background: rgba(255, 255, 255, 0.3);
+      border: none;
+      padding: 10px 20px;
+      margin: 5px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: bold;
+      color: #fff;
+      backdrop-filter: blur(5px);
     }
 
     video {
-      width: 100%;
-      border-radius: 20px;
-      margin-top: 20px;
+      display: none;
     }
   </style>
 </head>
 <body>
-  <div class="glass-card">
-    <h2>후면 카메라 뷰</h2>
-    <video id="camera" autoplay playsinline></video>
+
+  <video id="input_video" autoplay playsinline></video>
+  <canvas id="canvas"></canvas>
+
+  <div class="glass-ui">
+    <button onclick="setBackground('mountain')">산 배경</button>
+    <button onclick="setBackground('clear')">배경 제거</button>
   </div>
 
-  <script>
-    const video = document.getElementById('camera');
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
-    navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: { exact: "environment" }
-      },
-      audio: false
-    })
-    .then(stream => {
-      video.srcObject = stream;
-    })
-    .catch(err => {
-      console.error("카메라 접근 실패:", err);
-      alert("후면 카메라에 접근할 수 없습니다 😢");
+  <script>
+    const videoElement = document.getElementById('input_video');
+    const canvasElement = document.getElementById('canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+    let currentBg = null;
+
+    function setBackground(type) {
+      if (type === 'mountain') {
+        currentBg = new Image();
+        currentBg.src = 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=800&q=80'; // 산 이미지
+      } else {
+        currentBg = null;
+      }
+    }
+
+    // MediaPipe Selfie Segmentation
+    const selfieSegmentation = new SelfieSegmentation.SelfieSegmentation({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
     });
+
+    selfieSegmentation.setOptions({
+      modelSelection: 1 // 0: 빠른 모델, 1: 정밀 모델
+    });
+
+    selfieSegmentation.onResults((results) => {
+      canvasElement.width = videoElement.videoWidth;
+      canvasElement.height = videoElement.videoHeight;
+
+      canvasCtx.save();
+      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+      // 배경 처리
+      if (currentBg) {
+        canvasCtx.drawImage(currentBg, 0, 0, canvasElement.width, canvasElement.height);
+      }
+
+      // segmentation mask 적용
+      canvasCtx.globalCompositeOperation = 'destination-in';
+      canvasCtx.drawImage(results.segmentationMask, 0, 0, canvasElement.width, canvasElement.height);
+      canvasCtx.globalCompositeOperation = 'destination-over';
+      canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+      canvasCtx.restore();
+    });
+
+    // 카메라 연결
+    const camera = new Camera(videoElement, {
+      onFrame: async () => {
+        await selfieSegmentation.send({image: videoElement});
+      },
+      width: 1280,
+      height: 720,
+      facingMode: { exact: "environment" } // 후면 카메라
+    });
+    camera.start();
   </script>
+
 </body>
 </html>
