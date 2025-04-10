@@ -1,12 +1,61 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8">
+  <title>VisionOS 스타일 웹</title>
+  <style>
+    body {
+      margin: 0;
+      background: linear-gradient(135deg, #e0eafc, #cfdef3);
+      font-family: 'Helvetica Neue', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .glass-card {
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      padding: 20px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      margin-top: 20px;
+      width: 90%;
+      max-width: 400px;
+      text-align: center;
+    }
+
+    video {
+      width: 100%;
+      border-radius: 20px;
+      margin-top: 20px;
+    }
+  </style>
 </head>
 <body>
-    <button class="btn1" id="btn1">click me!</button>
+  <div class="glass-card">
+    <h2>후면 카메라 뷰</h2>
+    <video id="camera" autoplay playsinline></video>
+  </div>
+
+  <script>
+    const video = document.getElementById('camera');
+
+    navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { exact: "environment" }
+      },
+      audio: false
+    })
+    .then(stream => {
+      video.srcObject = stream;
+    })
+    .catch(err => {
+      console.error("카메라 접근 실패:", err);
+      alert("후면 카메라에 접근할 수 없습니다 😢");
+    });
+  </script>
 </body>
 </html>
