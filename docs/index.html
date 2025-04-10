@@ -1,110 +1,124 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <title>손 따라 부드럽게 움직이는 아이콘</title>
+  <meta charset="UTF-8">
+  <title>VisionOS 스타일 핸드 UI</title>
   <style>
     html, body {
       margin: 0;
       padding: 0;
+      height: 100%;
       background: black;
       overflow: hidden;
     }
 
     video {
-      display: none;
+      position: absolute;
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+      z-index: 0;
     }
 
     #icon {
       position: absolute;
       width: 80px;
       height: 80px;
-      border-radius: 50%;
-      background: rgba(255, 255, 255, 0.15);
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.1);
       backdrop-filter: blur(10px);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 32px;
+      font-size: 36px;
       color: white;
-      z-index: 10;
+      z-index: 2;
       pointer-events: none;
-      transition: opacity 0.3s ease;
+      opacity: 0;
+      transition: opacity 0.2s ease;
     }
   </style>
 </head>
 <body>
 
-<video id="input_video" autoplay playsinline muted></video>
-<div id="icon">📦</div>
+  <video id="video" autoplay playsinline muted></video>
+  <div id="icon">📦</div>
 
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
-<script>
-  const video = document.getElementById('input_video');
-  const icon = document.getElementById('icon');
+  <script>
+    const video = document.getElementById("video");
+    const icon = document.getElementById("icon");
 
-  let targetX = window.innerWidth / 2;
-  let targetY = window.innerHeight / 2;
-  let currentX = targetX;
-  let currentY = targetY;
-  let handVisible = false;
+    let targetX = window.innerWidth / 2;
+    let targetY = window.innerHeight / 2;
+    let currentX = targetX;
+    let currentY = targetY;
+    let handVisible = false;
 
-  function animate() {
-    // 부드럽게 따라가기 (lerp)
-    currentX += (targetX - currentX) * 0.15;
-    currentY += (targetY - currentY) * 0.15;
-    icon.style.left = `${currentX - 40}px`;
-    icon.style.top = `${currentY - 40}px`;
-
-    icon.style.opacity = handVisible ? 1 : 0;
-    requestAnimationFrame(animate);
-  }
-  animate();
-
-  const hands = new Hands({
-    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-  });
-
-  hands.setOptions({
-    maxNumHands: 1,
-    modelComplexity: 1,
-    minDetectionConfidence: 0.7,
-    minTrackingConfidence: 0.7
-  });
-
-  hands.onResults((results) => {
-    if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
-      handVisible = false;
-      return;
+    // 부드럽게 위치 따라가는 애니메이션
+    function animate() {
+      currentX += (targetX - currentX) * 0.15;
+      currentY += (targetY - currentY) * 0.15;
+      icon.style.left = `${currentX - 40}px`;
+      icon.style.top = `${currentY - 40}px`;
+      icon.style.opacity = handVisible ? 1 : 0;
+      requestAnimationFrame(animate);
     }
+    animate();
 
-    const indexFinger = results.multiHandLandmarks[0][8];
-    const vw = video.videoWidth;
-    const vh = video.videoHeight;
+    // 손 추적 설정
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    });
 
-    const x = indexFinger.x * vw;
-    const y = indexFinger.y * vh;
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.7
+    });
 
-    // 화면 비율에 맞게 조정 (iOS Safari 대응)
-    const rect = video.getBoundingClientRect();
-    targetX = rect.left + (x / vw) * rect.width;
-    targetY = rect.top + (y / vh) * rect.height;
-    handVisible = true;
-  });
+    hands.onResults((results) => {
+      if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+        handVisible = false;
+        return;
+      }
 
-  const camera = new Camera(video, {
-    onFrame: async () => {
-      await hands.send({ image: video });
-    },
-    width: 1280,
-    height: 720,
-    facingMode: { ideal: "environment" } // iOS Safari 대응
-  });
+      const indexFinger = results.multiHandLandmarks[0][8];
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
 
-  camera.start();
-</script>
+      const x = indexFinger.x * vw;
+      const y = indexFinger.y * vh;
+
+      const rect = video.getBoundingClientRect();
+      targetX = rect.left + (x / vw) * rect.width;
+      targetY = rect.top + (y / vh) * rect.height;
+      handVisible = true;
+    });
+
+    // iOS Safari에서도 작동하는 카메라 스트림 직접 연결
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" } }
+    })
+    .then((stream) => {
+      video.srcObject = stream;
+
+      const cameraFeed = new Camera(video, {
+        onFrame: async () => {
+          await hands.send({ image: video });
+        },
+        width: 1280,
+        height: 720
+      });
+      cameraFeed.start();
+    })
+    .catch((err) => {
+      alert("카메라 접근 실패: " + err.message);
+    });
+  </script>
 
 </body>
 </html>
