@@ -64,12 +64,16 @@
     canvas.height = window.innerHeight;
 
     navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "environment" } }
+      video: {
+        facingMode: "environment"
+      }
     }).then((stream) => {
       video.srcObject = stream;
-      video.onloadedmetadata = () => {
-        video.play();
-      };
+      video.play();
+    }).catch((err) => {
+      alert("카메라 접근 실패: " + err.message);
+    });
+
     }).catch((err) => {
       alert("카메라 실패: " + err.message);
     });
