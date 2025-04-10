@@ -1,137 +1,38 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <title>제스처 아이콘 드래그</title>
+  <meta charset="UTF-8">
+  <title>iOS 후면 카메라 테스트</title>
   <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
+    body, html {
+      margin: 0; padding: 0;
       height: 100%;
+      overflow: hidden;
       background: black;
     }
-
-    canvas {
-      position: absolute;
-      top: 0; left: 0;
+    video {
       width: 100vw;
       height: 100vh;
-      z-index: 1;
-    }
-
-    #app-icon {
-      position: absolute;
-      top: 40%;
-      left: 40%;
-      width: 80px;
-      height: 80px;
-      background: url('https://cdn-icons-png.flaticon.com/512/1828/1828817.png') no-repeat center/cover;
-      border-radius: 24px;
-      backdrop-filter: blur(12px);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-      z-index: 10;
-      transition: transform 0.1s;
-    }
-
-    video {
-      display: none;
+      object-fit: cover;
     }
   </style>
 </head>
 <body>
 
-  <video id="video" autoplay playsinline></video>
-  <canvas id="canvas"></canvas>
-  <div id="app-icon"></div>
-
-  <!-- MediaPipe Hands -->
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <video id="video" autoplay playsinline muted></video>
 
   <script>
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    const appIcon = document.getElementById('app-icon');
-
-    let isDragging = false;
-    let offsetX = 0;
-    let offsetY = 0;
-
-    // 캔버스 초기화
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    const video = document.getElementById("video");
 
     navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: "environment"
-      }
-    }).then((stream) => {
+      video: { facingMode: "environment" }
+    })
+    .then((stream) => {
       video.srcObject = stream;
-      video.play();
-    }).catch((err) => {
+    })
+    .catch((err) => {
       alert("카메라 접근 실패: " + err.message);
     });
-
-    }).catch((err) => {
-      alert("카메라 실패: " + err.message);
-    });
-
-    const hands = new Hands({
-      locateFile: (file) =>
-        `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-    });
-
-    hands.setOptions({
-      maxNumHands: 1,
-      modelComplexity: 1,
-      minDetectionConfidence: 0.7,
-      minTrackingConfidence: 0.7
-    });
-
-    hands.onResults((results) => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-
-      if (results.multiHandLandmarks.length > 0) {
-        const landmarks = results.multiHandLandmarks[0];
-        const indexFinger = landmarks[8]; // 검지 끝
-
-        // 화면 좌표로 변환
-        const x = indexFinger.x * canvas.width;
-        const y = indexFinger.y * canvas.height;
-
-        // 아이콘 위치 체크
-        const iconRect = appIcon.getBoundingClientRect();
-
-        if (!isDragging &&
-            x >= iconRect.left && x <= iconRect.right &&
-            y >= iconRect.top && y <= iconRect.bottom) {
-          isDragging = true;
-          offsetX = x - iconRect.left;
-          offsetY = y - iconRect.top;
-        }
-
-        if (isDragging) {
-          const newX = x - offsetX;
-          const newY = y - offsetY;
-          appIcon.style.left = `${newX}px`;
-          appIcon.style.top = `${newY}px`;
-        }
-      } else {
-        isDragging = false;
-      }
-    });
-
-    const camera = new Camera(video, {
-      onFrame: async () => {
-        await hands.send({image: video});
-      },
-      width: 1280,
-      height: 720
-    });
-    camera.start();
   </script>
 
 </body>
