@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>MR 카메라 테스트</title>
+  <title>MR 카메라 앱</title>
   <style>
     html, body {
       margin: 0;
@@ -56,9 +56,13 @@
   </style>
 </head>
 <body>
+  <!-- 후면 카메라 -->
   <video id="camera" autoplay muted playsinline></video>
+
+  <!-- 전면 카메라 (핀치용) -->
   <video id="frontCam" autoplay muted playsinline></video>
 
+  <!-- 앱 아이콘 & 앱 창 -->
   <div class="app-icon" id="icon1"></div>
   <div id="appWindow">📱 앱이 실행되었습니다!</div>
 
@@ -69,27 +73,36 @@
   <script>
     // 1. 후면 카메라 시작
     async function startRearCamera() {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: "environment" } // ← exact 대신 ideal로 변경!
-        },
-        audio: false
-      });
-
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" } }, // ← 여기 바뀜!
+          audio: false
+        });
+        document.getElementById("camera").srcObject = stream;
+      } catch (err) {
+        alert("후면 카메라를 사용할 수 없습니다.");
+        console.error(err);
+      }
+    }
 
     // 2. 전면 카메라 (제스처용)
     async function startFrontCamera() {
-      const stream = await navigator.mediaDevices.getUserMedia({
-    	 video: { facingMode: "user" },
-        audio: false
-      });
-      document.getElementById("frontCam").srcObject = stream;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user" },
+          audio: false
+        });
+        document.getElementById("frontCam").srcObject = stream;
+      } catch (err) {
+        alert("전면 카메라를 사용할 수 없습니다.");
+        console.error(err);
+      }
     }
 
     startRearCamera();
     startFrontCamera();
 
-    // 3. 핸드트래킹
+    // 3. 핸드트래킹 설정
     const hands = new Hands({
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
     });
