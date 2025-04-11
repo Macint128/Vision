@@ -1,20 +1,62 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>내 첫 번째 웹페이지</title>
+  <title>Cardboard Camera View</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
-      background-color: #f0f0f0;
-      text-align: center;
-      padding: 50px;
+      margin: 0;
+      background: black;
+      overflow: hidden;
+      display: flex;
+    }
+    video {
+      object-fit: cover;
+      width: 100%;
+      height: 100%;
+      transform: scaleX(-1); /* 거울처럼 보이지 않게 뒤집기 */
+    }
+    .view {
+      flex: 1;
+      position: relative;
+    }
+    #camera-feed {
+      position: absolute;
+      width: 200%;
+      height: 100%;
+      left: -50%;
+      top: 0;
     }
   </style>
 </head>
 <body>
-  <h1>안녕하세요!</h1>
-  <p>이건 내 첫 번째 웹페이지예요.</p>
+  <div class="view"><video id="left-eye" autoplay playsinline muted></video></div>
+  <div class="view"><video id="right-eye" autoplay playsinline muted></video></div>
+
+  <script>
+    const leftEye = document.getElementById('left-eye');
+    const rightEye = document.getElementById('right-eye');
+
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { exact: "environment" }
+          },
+          audio: false
+        });
+
+        // 후면 카메라 스트림 두 개의 video 요소에 공유
+        leftEye.srcObject = stream;
+        rightEye.srcObject = stream;
+      } catch (err) {
+        alert('카메라 접근 실패: ' + err.message);
+        console.error(err);
+      }
+    }
+
+    startCamera();
+  </script>
 </body>
 </html>
