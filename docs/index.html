@@ -2,41 +2,110 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>카메라 테스트</title>
+  <title>MR App (Simple)</title>
   <style>
     body, html {
       margin: 0;
       padding: 0;
-      height: 100%;
       overflow: hidden;
     }
 
-    video {
+    #backCam {
       position: fixed;
-      top: 0;
-      left: 0;
+      top: 0; left: 0;
       width: 100vw;
       height: 100vh;
       object-fit: cover;
-      background: black;
+      z-index: -1;
+    }
+
+    .app-icon {
+      position: absolute;
+      top: 40%;
+      left: 40%;
+      width: 80px;
+      height: 80px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 20px;
+      backdrop-filter: blur(10px);
+      z-index: 10;
+    }
+
+    #appWindow {
+      position: absolute;
+      top: 60%;
+      left: 30%;
+      width: 40vw;
+      height: 30vh;
+      background: rgba(255,255,255,0.2);
+      backdrop-filter: blur(8px);
+      border-radius: 15px;
+      display: none;
+      z-index: 20;
+      color: white;
+      padding: 20px;
     }
   </style>
 </head>
 <body>
-  <video id="cam" autoplay muted playsinline></video>
+  <video id="backCam" autoplay muted playsinline></video>
+
+  <div class="app-icon" id="icon1"></div>
+  <div id="appWindow">📱 앱 실행됨!</div>
+
+  <!-- MediaPipe -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+  <video id="frontCam" autoplay muted playsinline style="display:none;"></video>
 
   <script>
+    // 후면 카메라 → 배경
     navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "environment" } },
-      audio: false
+      video: { facingMode: { ideal: "environment" } }
     }).then(stream => {
-      const video = document.getElementById("cam");
-      video.srcObject = stream;
-      video.play();
-    }).catch(err => {
-      alert("카메라 접근 오류: " + err);
-      console.error(err);
+      document.getElementById("backCam").srcObject = stream;
     });
+
+    // 전면 카메라 → 핀치 인식
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user" }
+    }).then(stream => {
+      document.getElementById("frontCam").srcObject = stream;
+    });
+
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    });
+
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.7
+    });
+
+    hands.onResults(results => {
+      if (!results.multiHandLandmarks.length) return;
+      const lm = results.multiHandLandmarks[0];
+      const d = Math.hypot(
+        lm[4].x - lm[8].x,
+        lm[4].y - lm[8].y
+      );
+      if (d < 0.05) {
+        document.getElementById("appWindow").style.display = "block";
+      }
+    });
+
+    const frontCam = document.getElementById("frontCam");
+    const camera = new Camera(frontCam, {
+      onFrame: async () => {
+        await hands.send({ image: frontCam });
+      },
+      width: 640,
+      height: 480
+    });
+    camera.start();
   </script>
 </body>
 </html>
