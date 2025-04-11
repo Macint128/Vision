@@ -14,14 +14,18 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { overflow: hidden; font-family: sans-serif; }
 
-    video { display: none; }
-
     #backCam {
       position: fixed;
+      top: 0;
+      left: 0;
       width: 100vw;
       height: 100vh;
       object-fit: cover;
       z-index: -1;
+    }
+
+    #frontCam {
+      display: none;
     }
 
     .app-icon {
@@ -63,7 +67,7 @@
 </head>
 <body>
 
-<video id="backCam" autoplay muted playsinline style="position: fixed; width: 100vw; height: 100vh; object-fit: cover; z-index: -1;"></video>
+<video id="backCam" autoplay muted playsinline></video>
 <video id="frontCam" autoplay muted playsinline></video>
 
 <!-- 앱 아이콘들 -->
@@ -73,7 +77,7 @@
 
 <!-- 열린 앱 -->
 <div id="appWindow" class="floating-window">
-  <div style="padding: 20px;">👋 앱 실행됨!</div>
+  <div style="padding: 20px;">📱 앱이 실행됐어요!</div>
   <div id="handle" class="window-handle"></div>
 </div>
 
@@ -81,18 +85,20 @@
   let focusedApp = null;
   let isAppOpen = false;
 
-  // === 후면 카메라 (배경용)
-  navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } } })
+  // === 후면 카메라 (배경)
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } } })
     .then((stream) => {
-      document.getElementById('backCam').srcObject = stream;
+      const video = document.getElementById('backCam');
+      video.srcObject = stream;
+      video.play();
+    }).catch(err => {
+      console.error("후면 카메라 오류:", err);
     });
 
-  // === 전면 카메라 (시선/손 추적용)
+  // === 전면 카메라 (시선/손 추적)
   const frontCam = document.getElementById('frontCam');
-  let faceVideoStream;
   navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
     .then((stream) => {
-      faceVideoStream = stream;
       frontCam.srcObject = stream;
       frontCam.play();
     });
@@ -163,7 +169,7 @@
   });
   camera.start();
 
-  // === 윈도우 드래그
+  // === 드래그 로직
   const win = document.getElementById("appWindow");
   const handle = document.getElementById("handle");
   let isDragging = false, offsetX = 0, offsetY = 0;
