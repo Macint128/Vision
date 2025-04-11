@@ -70,16 +70,17 @@
     // 1. 후면 카메라 시작
     async function startRearCamera() {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { exact: "environment" } },
+        video: {
+          facingMode: { ideal: "environment" } // ← exact 대신 ideal로 변경!
+        },
         audio: false
       });
-      document.getElementById("camera").srcObject = stream;
-    }
+
 
     // 2. 전면 카메라 (제스처용)
     async function startFrontCamera() {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user" },
+    	 video: { facingMode: "user" },
         audio: false
       });
       document.getElementById("frontCam").srcObject = stream;
