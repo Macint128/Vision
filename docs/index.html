@@ -1,22 +1,25 @@
 <!DOCTYPE html>
-<html>
+<html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>MR App (Simple)</title>
+  <title>MR 카메라 테스트</title>
   <style>
-    body, html {
+    html, body {
       margin: 0;
       padding: 0;
+      height: 100%;
       overflow: hidden;
+      background: black;
     }
 
-    #backCam {
+    #camera {
       position: fixed;
-      top: 0; left: 0;
+      top: 0;
+      left: 0;
       width: 100vw;
       height: 100vh;
       object-fit: cover;
-      z-index: -1;
+      z-index: 0;
     }
 
     .app-icon {
@@ -28,7 +31,7 @@
       background: rgba(255, 255, 255, 0.2);
       border-radius: 20px;
       backdrop-filter: blur(10px);
-      z-index: 10;
+      z-index: 2;
     }
 
     #appWindow {
@@ -41,39 +44,51 @@
       backdrop-filter: blur(8px);
       border-radius: 15px;
       display: none;
-      z-index: 20;
+      z-index: 3;
       color: white;
       padding: 20px;
+      text-align: center;
+    }
+
+    video#frontCam {
+      display: none;
     }
   </style>
 </head>
 <body>
-  <video id="backCam" autoplay muted playsinline></video>
+  <video id="camera" autoplay muted playsinline></video>
+  <video id="frontCam" autoplay muted playsinline></video>
 
   <div class="app-icon" id="icon1"></div>
-  <div id="appWindow">📱 앱 실행됨!</div>
+  <div id="appWindow">📱 앱이 실행되었습니다!</div>
 
   <!-- MediaPipe -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
-  <video id="frontCam" autoplay muted playsinline style="display:none;"></video>
-
   <script>
-    // 후면 카메라 → 배경
-    navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "environment" } }
-    }).then(stream => {
-      document.getElementById("backCam").srcObject = stream;
-    });
+    // 1. 후면 카메라 시작
+    async function startRearCamera() {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { exact: "environment" } },
+        audio: false
+      });
+      document.getElementById("camera").srcObject = stream;
+    }
 
-    // 전면 카메라 → 핀치 인식
-    navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "user" }
-    }).then(stream => {
+    // 2. 전면 카메라 (제스처용)
+    async function startFrontCamera() {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user" },
+        audio: false
+      });
       document.getElementById("frontCam").srcObject = stream;
-    });
+    }
 
+    startRearCamera();
+    startFrontCamera();
+
+    // 3. 핸드트래킹
     const hands = new Hands({
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
     });
@@ -86,17 +101,20 @@
     });
 
     hands.onResults(results => {
-      if (!results.multiHandLandmarks.length) return;
+      if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) return;
+
       const lm = results.multiHandLandmarks[0];
-      const d = Math.hypot(
+      const pinchDist = Math.hypot(
         lm[4].x - lm[8].x,
         lm[4].y - lm[8].y
       );
-      if (d < 0.05) {
+
+      if (pinchDist < 0.05) {
         document.getElementById("appWindow").style.display = "block";
       }
     });
 
+    // 4. 프론트카메라에서 핸드 제스처 추적 시작
     const frontCam = document.getElementById("frontCam");
     const camera = new Camera(frontCam, {
       onFrame: async () => {
