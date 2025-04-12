@@ -1,78 +1,193 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MR VisionOS App</title>
+  <title>VisionOS 스타일 MR 앱</title>
   <style>
-    body { margin: 0; overflow: hidden; }
-    canvas { display: block; }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f0f0f5;
+      color: #333;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      flex-direction: column;
+    }
+
+    .container {
+      position: relative;
+      width: 100%;
+      height: 80%;
+      background-color: #fff;
+      border-radius: 16px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .bottom-bar {
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+      height: 50px;
+      background-color: #6200ea;
+      border-radius: 12px 12px 0 0;
+      cursor: grab;
+    }
+
+    .content {
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 2rem;
+      color: #333;
+    }
+
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
   </style>
 </head>
 <body>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.133.0/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic"></script>
+
+  <div class="container">
+    <div class="content">
+      <p>VisionOS 스타일 MR 앱</p>
+    </div>
+    <div class="bottom-bar" id="bottom-bar"></div>
+  </div>
+
+  <canvas id="canvas"></canvas>
+
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/handtracking"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh"></script>
   <script>
-    let scene, camera, renderer;
-    
-    // Set up 3D scene using Three.js
-    function init() {
-      scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-      renderer = new THREE.WebGLRenderer();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      document.body.appendChild(renderer.domElement);
-      
-      const geometry = new THREE.BoxGeometry();
-      const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-      const cube = new THREE.Mesh(geometry, material);
-      scene.add(cube);
-      
-      camera.position.z = 5;
-      
-      animate();
-    }
+    const videoElement = document.createElement('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const bottomBar = document.getElementById('bottom-bar');
+    let dragging = false;
+    let startY = 0;
+    let currentY = 0;
 
-    // Animation loop
-    function animate() {
-      requestAnimationFrame(animate);
-      renderer.render(scene, camera);
-    }
+    // Mediapipe 설정 (손 추적과 얼굴 추적)
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+    });
 
-    // Mediapipe Hand Gesture Recognition (핀치 제스처 등)
-    function setupHandTracking() {
-      const hands = new Hands();
-      hands.setOptions({
-        maxNumHands: 1,
-        modelComplexity: 1,
-      });
-      
-      hands.onResults(results => {
-        if (results.multiHandLandmarks) {
-          // 핀치 제스처 처리 예시
-          const pinch = results.multiHandLandmarks[0]; // 첫 번째 손을 기준으로
-          // 핀치 제스처에 대한 로직 구현
-        }
-      });
+    const faceMesh = new FaceMesh({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
+    });
 
-      // Start video capture and hand tracking
-      const video = document.createElement('video');
-      video.width = 640;
-      video.height = 480;
-      document.body.appendChild(video);
-      
-      navigator.mediaDevices.getUserMedia({ video: true })
-        .then(stream => {
-          video.srcObject = stream;
-          video.play();
-          hands.send({ image: video });
+    hands.onResults((results) => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (results.multiHandLandmarks) {
+        results.multiHandLandmarks.forEach((landmarks) => {
+          drawHandLandmarks(ctx, landmarks);
+          checkPinchGesture(landmarks);
         });
+      }
+    });
+
+    faceMesh.onResults((results) => {
+      if (results.multiFaceLandmarks) {
+        results.multiFaceLandmarks.forEach((landmarks) => {
+          drawFaceLandmarks(ctx, landmarks);
+        });
+      }
+    });
+
+    // 비디오 스트림 시작
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then((stream) => {
+        videoElement.srcObject = stream;
+        videoElement.play();
+        hands.send({ image: videoElement });
+        faceMesh.send({ image: videoElement });
+      });
+
+    // 손 랜드마크 그리기
+    function drawHandLandmarks(ctx, landmarks) {
+      const width = canvas.width;
+      const height = canvas.height;
+
+      landmarks.forEach((landmark) => {
+        const x = landmark.x * width;
+        const y = landmark.y * height;
+        ctx.beginPath();
+        ctx.arc(x, y, 5, 0, 2 * Math.PI);
+        ctx.fillStyle = 'red';
+        ctx.fill();
+      });
     }
 
-    window.onload = function() {
-      init();
-      setupHandTracking();
-    };
+    // 얼굴 랜드마크 그리기
+    function drawFaceLandmarks(ctx, landmarks) {
+      const width = canvas.width;
+      const height = canvas.height;
+
+      landmarks.forEach((landmark) => {
+        const x = landmark.x * width;
+        const y = landmark.y * height;
+        ctx.beginPath();
+        ctx.arc(x, y, 5, 0, 2 * Math.PI);
+        ctx.fillStyle = 'blue';
+        ctx.fill();
+      });
+    }
+
+    // 핀치 제스처 체크
+    function checkPinchGesture(landmarks) {
+      const thumbTip = landmarks[4]; // 엄지손톱
+      const indexTip = landmarks[8]; // 검지 손톱
+      const distance = Math.sqrt(Math.pow(indexTip.x - thumbTip.x, 2) + Math.pow(indexTip.y - thumbTip.y, 2));
+
+      if (distance < 0.05) {
+        console.log("핀치 제스처 감지!");
+        // 핀치 제스처 발생 시, 하단 바 드래그 활성화
+        bottomBar.style.cursor = 'grabbing';
+        dragging = true;
+      } else {
+        if (dragging) {
+          // 핀치 제스처가 떨어지면 드래그 비활성화
+          dragging = false;
+          bottomBar.style.cursor = 'grab';
+        }
+      }
+    }
+
+    // 하단 바 드래그 기능 구현
+    bottomBar.addEventListener('mousedown', (e) => {
+      if (dragging) {
+        startY = e.clientY;
+        document.addEventListener('mousemove', dragBottomBar);
+        document.addEventListener('mouseup', stopDrag);
+      }
+    });
+
+    function dragBottomBar(e) {
+      const offsetY = e.clientY - startY;
+      currentY += offsetY;
+      bottomBar.style.transform = `translateY(${currentY}px)`;
+      startY = e.clientY;
+    }
+
+    function stopDrag() {
+      document.removeEventListener('mousemove', dragBottomBar);
+      document.removeEventListener('mouseup', stopDrag);
+    }
   </script>
 </body>
 </html>
