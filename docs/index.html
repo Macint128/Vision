@@ -1,79 +1,27 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <title>Mediapipe 핀치 인식</title>
-  <style>
-    body { margin: 0; overflow: hidden; }
-    #camera {
-      position: fixed;
-      width: 100vw;
-      height: 100vh;
-      object-fit: cover;
-      z-index: -1;
-    }
-    #app-window {
-      position: absolute;
-      top: 30%;
-      left: 20%;
-      width: 60%;
-      padding: 2rem;
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(10px);
-      border-radius: 1.5rem;
-      box-shadow: 0 0 20px rgba(0,0,0,0.3);
-      color: white;
-      text-align: center;
-      display: none;
-    }
-  </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VisionOS MR 앱</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <video id="camera" autoplay playsinline muted></video>
-  <div id="app-window">👋 핀치 인식됨! 앱 실행!</div>
+  <video id="webcam" autoplay muted playsinline></video>
 
-  <script type="module">
-    import { Hands } from 'https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js';
-    import { Camera } from 'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js';
+  <div id="app-container">
+    <div class="app-icon" data-app="1">🧭</div>
+    <div class="app-icon" data-app="2">📷</div>
 
-    const videoElement = document.getElementById('camera');
-    const appWindow = document.getElementById('app-window');
+    <div class="app-window hidden" id="app1">
+      <div class="app-header">앱 1</div>
+      <div class="app-body">콘텐츠 영역</div>
+    </div>
+  </div>
 
-    const hands = new Hands({
-      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-    });
-
-    hands.setOptions({
-      maxNumHands: 1,
-      modelComplexity: 1,
-      minDetectionConfidence: 0.7,
-      minTrackingConfidence: 0.7
-    });
-
-    hands.onResults((results) => {
-      if (!results.multiHandLandmarks.length) return;
-      const landmarks = results.multiHandLandmarks[0];
-
-      const thumbTip = landmarks[4];   // 엄지 끝
-      const indexTip = landmarks[8];   // 검지 끝
-
-      const dx = thumbTip.x - indexTip.x;
-      const dy = thumbTip.y - indexTip.y;
-      const dist = Math.sqrt(dx*dx + dy*dy);
-
-      if (dist < 0.05) { // 거리 임계값
-        appWindow.style.display = 'block'; // 핀치 감지 → 앱 실행
-      }
-    });
-
-    const camera = new Camera(videoElement, {
-      onFrame: async () => {
-        await hands.send({ image: videoElement });
-      },
-      width: 640,
-      height: 480
-    });
-    camera.start();
-  </script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>
