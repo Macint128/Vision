@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>VisionOS MR 앱 - 핀치+시선</title>
+  <title>VisionOS MR 앱 - 후면 카메라 + 핀치+시선</title>
   <style>
     body {
       margin: 0;
@@ -18,7 +18,7 @@
       width: 100vw;
       height: 100vh;
       object-fit: cover;
-      opacity: 0.05;
+      opacity: 0.1;
       z-index: -1;
     }
 
@@ -196,6 +196,18 @@
       const rightEye = faceLandmarks[468]; // 오른쪽 눈 중앙쯤
       const eyePos = toScreenCoords(rightEye);
       currentTarget = getFocusedIcon(eyePos);
+    });
+
+    // 후면 카메라 설정
+    navigator.mediaDevices.enumerateDevices().then(devices => {
+      const rearCamera = devices.find(device => device.kind === 'videoinput' && device.label.includes('back'));
+      if (rearCamera) {
+        navigator.mediaDevices.getUserMedia({
+          video: { deviceId: rearCamera.deviceId }
+        }).then(stream => {
+          webcam.srcObject = stream;
+        }).catch(err => console.error("후면 카메라 오류:", err));
+      }
     });
 
     // Mediapipe 카메라 시작
