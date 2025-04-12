@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>VisionOS MR 앱 - 후면 카메라 + 핀치+시선</title>
+  <title>VisionOS MR 앱 - 후면 카메라 + 핀치 + 시선</title>
   <style>
     body {
       margin: 0;
@@ -12,13 +12,23 @@
       overflow: hidden;
     }
 
-    #webcam {
+    #webcam-front {
       position: fixed;
       top: 0; left: 0;
       width: 100vw;
       height: 100vh;
       object-fit: cover;
-      opacity: 0.1;
+      opacity: 0; /* 전면 카메라는 보이지 않게 처리 */
+      z-index: -1;
+    }
+
+    #webcam-rear {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+      opacity: 1; /* 후면 카메라는 보이게 처리 */
       z-index: -1;
     }
 
@@ -81,7 +91,11 @@
   </style>
 </head>
 <body>
-  <video id="webcam" autoplay muted playsinline></video>
+  <!-- 전면 카메라 (시선 추적용) -->
+  <video id="webcam-front" autoplay muted playsinline></video>
+
+  <!-- 후면 카메라 (핸드 추적용) -->
+  <video id="webcam-rear" autoplay muted playsinline></video>
 
   <div id="app-container">
     <div class="app-icon" id="icon1" data-app="1">🧭</div>
@@ -99,7 +113,8 @@
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
   <script>
-    const webcam = document.getElementById('webcam');
+    const webcamFront = document.getElementById('webcam-front');
+    const webcamRear = document.getElementById('webcam-rear');
     const appWindow = document.getElementById('app1');
     const icon1 = document.getElementById('icon1');
     const appIcons = document.querySelectorAll('.app-icon');
@@ -198,31 +213,49 @@
       currentTarget = getFocusedIcon(eyePos);
     });
 
-    // 후면 카메라 설정
+    // 전면 카메라 스트림 설정 (시선 추적용)
+    navigator.mediaDevices.enumerateDevices().then(devices => {
+      const frontCamera = devices.find(device => device.kind === 'videoinput' && device.label.includes('front'));
+      if (frontCamera) {
+        navigator.mediaDevices.getUserMedia({
+          video: { deviceId: frontCamera.deviceId }
+        }).then(stream => {
+          webcamFront.srcObject = stream;
+
+          // Mediapipe에서 전면 카메라 스트림 사용 (FaceMesh용)
+          const cameraFront = new Camera(webcamFront, {
+            onFrame: async () => {
+              await face.send({ image: webcamFront });
+            },
+            width: 640,
+            height: 480
+          });
+          cameraFront.start();
+        }).catch(err => console.error("전면 카메라 오류:", err));
+      }
+    });
+
+    // 후면 카메라 스트림 설정 (핸드 추적용)
     navigator.mediaDevices.enumerateDevices().then(devices => {
       const rearCamera = devices.find(device => device.kind === 'videoinput' && device.label.includes('back'));
       if (rearCamera) {
         navigator.mediaDevices.getUserMedia({
           video: { deviceId: rearCamera.deviceId }
         }).then(stream => {
-          webcam.srcObject = stream;
+          webcamRear.srcObject = stream;
+
+          // Mediapipe에서 후면 카메라 스트림 사용 (Hands용)
+          const cameraRear = new Camera(webcamRear, {
+            onFrame: async () => {
+              await hands.send({ image: webcamRear });
+            },
+            width: 640,
+            height: 480
+          });
+          cameraRear.start();
         }).catch(err => console.error("후면 카메라 오류:", err));
       }
     });
-
-    // Mediapipe 카메라 시작
-    const camera = new Camera(webcam, {
-      onFrame: async () => {
-        await Promise.all([
-          hands.send({ image: webcam }),
-          face.send({ image: webcam })
-        ]);
-      },
-      width: 640,
-      height: 480
-    });
-
-    camera.start();
   </script>
 </body>
 </html>
