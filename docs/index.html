@@ -3,15 +3,89 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>VisionOS MR 앱</title>
-  <link rel="stylesheet" href="style.css" />
+  <title>VisionOS MR 앱 - 핀치+시선</title>
+  <style>
+    body {
+      margin: 0;
+      background: #0d0d0e;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      overflow: hidden;
+    }
+
+    #webcam {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+      opacity: 0.05;
+      z-index: -1;
+    }
+
+    #app-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+    }
+
+    .app-icon {
+      width: 80px;
+      height: 80px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 24px;
+      backdrop-filter: blur(20px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      cursor: pointer;
+      transition: transform 0.2s;
+      position: relative;
+    }
+
+    .highlight {
+      box-shadow: 0 0 0 4px rgba(0, 255, 255, 0.5);
+    }
+
+    .app-window {
+      position: absolute;
+      top: 200px;
+      left: 200px;
+      width: 300px;
+      border-radius: 24px;
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(16px);
+      color: white;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .app-header {
+      padding: 12px 16px;
+      background: rgba(255, 255, 255, 0.1);
+      border-top-left-radius: 24px;
+      border-top-right-radius: 24px;
+      user-select: none;
+    }
+
+    .app-body {
+      padding: 20px;
+    }
+
+    .hidden {
+      display: none;
+    }
+  </style>
 </head>
 <body>
   <video id="webcam" autoplay muted playsinline></video>
 
   <div id="app-container">
-    <div class="app-icon" data-app="1">🧭</div>
-    <div class="app-icon" data-app="2">📷</div>
+    <div class="app-icon" id="icon1" data-app="1">🧭</div>
+    <div class="app-icon" id="icon2" data-app="2">📷</div>
 
     <div class="app-window hidden" id="app1">
       <div class="app-header">앱 1</div>
@@ -19,9 +93,124 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
-  <script src="script.js"></script>
+  <!-- Mediapipe Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+  <script>
+    const webcam = document.getElementById('webcam');
+    const appWindow = document.getElementById('app1');
+    const icon1 = document.getElementById('icon1');
+    const appIcons = document.querySelectorAll('.app-icon');
+
+    let currentTarget = null;
+    let isDraggingWindow = false;
+
+    // 거리 계산
+    function getDistance(p1, p2) {
+      const dx = p1.x - p2.x;
+      const dy = p1.y - p2.y;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    // 화면 좌표계 변환
+    function toScreenCoords(landmark) {
+      return {
+        x: landmark.x * window.innerWidth,
+        y: landmark.y * window.innerHeight
+      };
+    }
+
+    // 시선이 머무르는 아이콘 찾기
+    function getFocusedIcon(screenPos) {
+      let found = null;
+      appIcons.forEach(icon => {
+        const rect = icon.getBoundingClientRect();
+        const within =
+          screenPos.x >= rect.left &&
+          screenPos.x <= rect.right &&
+          screenPos.y >= rect.top &&
+          screenPos.y <= rect.bottom;
+
+        icon.classList.toggle("highlight", within);
+
+        if (within) found = icon;
+      });
+      return found;
+    }
+
+    // Mediapipe 핸드 모델
+    const hands = new Hands({
+      locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    });
+
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.7
+    });
+
+    hands.onResults(results => {
+      if (!results.multiHandLandmarks || !results.multiHandLandmarks.length) {
+        isDraggingWindow = false;
+        return;
+      }
+
+      const hand = results.multiHandLandmarks[0];
+      const isPinching = getDistance(hand[4], hand[8]) < 0.05;
+
+      const indexScreen = toScreenCoords(hand[8]);
+
+      if (isPinching) {
+        if (currentTarget) {
+          appWindow.classList.remove("hidden");
+        } else if (!appWindow.classList.contains("hidden")) {
+          // 핀치 중 → 앱 드래그
+          appWindow.style.left = `${indexScreen.x - 150}px`;
+          appWindow.style.top = `${indexScreen.y - 40}px`;
+        }
+      }
+    });
+
+    // Mediapipe 얼굴 모델
+    const face = new FaceMesh({
+      locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+    });
+
+    face.setOptions({
+      maxNumFaces: 1,
+      refineLandmarks: true,
+      minDetectionConfidence: 0.6,
+      minTrackingConfidence: 0.6
+    });
+
+    face.onResults(results => {
+      if (!results.multiFaceLandmarks || !results.multiFaceLandmarks.length) {
+        currentTarget = null;
+        return;
+      }
+
+      const faceLandmarks = results.multiFaceLandmarks[0];
+      const rightEye = faceLandmarks[468]; // 오른쪽 눈 중앙쯤
+      const eyePos = toScreenCoords(rightEye);
+      currentTarget = getFocusedIcon(eyePos);
+    });
+
+    // Mediapipe 카메라 시작
+    const camera = new Camera(webcam, {
+      onFrame: async () => {
+        await Promise.all([
+          hands.send({ image: webcam }),
+          face.send({ image: webcam })
+        ]);
+      },
+      width: 640,
+      height: 480
+    });
+
+    camera.start();
+  </script>
 </body>
 </html>
