@@ -1,269 +1,78 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>VisionOS MR 앱 - 후면 카메라 + 핀치 + 시선</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MR VisionOS App</title>
   <style>
-    body {
-      margin: 0;
-      background: #0d0d0e;
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      overflow: hidden;
-    }
-
-    #webcam-front {
-      position: fixed;
-      top: 0; left: 0;
-      width: 100vw;
-      height: 100vh;
-      object-fit: cover;
-      opacity: 0; /* 전면 카메라는 보이지 않게 처리 */
-      z-index: -1;
-    }
-
-    #webcam-rear {
-      position: fixed;
-      top: 0; left: 0;
-      width: 100vw;
-      height: 100vh;
-      object-fit: cover;
-      opacity: 1; /* 후면 카메라는 보이게 처리 */
-      z-index: -1;
-    }
-
-    #app-container {
-      position: relative;
-      width: 100vw;
-      height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 24px;
-    }
-
-    .app-icon {
-      width: 80px;
-      height: 80px;
-      background: rgba(255,255,255,0.1);
-      border-radius: 24px;
-      backdrop-filter: blur(20px);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 32px;
-      cursor: pointer;
-      transition: transform 0.2s;
-      position: relative;
-    }
-
-    .highlight {
-      box-shadow: 0 0 0 4px rgba(0, 255, 255, 0.5);
-    }
-
-    .app-window {
-      position: absolute;
-      top: 200px;
-      left: 200px;
-      width: 300px;
-      border-radius: 24px;
-      background: rgba(255, 255, 255, 0.08);
-      backdrop-filter: blur(16px);
-      color: white;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-    }
-
-    .app-header {
-      padding: 12px 16px;
-      background: rgba(255, 255, 255, 0.1);
-      border-top-left-radius: 24px;
-      border-top-right-radius: 24px;
-      user-select: none;
-    }
-
-    .app-body {
-      padding: 20px;
-    }
-
-    .hidden {
-      display: none;
-    }
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; }
   </style>
 </head>
 <body>
-  <!-- 전면 카메라 (시선 추적용) -->
-  <video id="webcam-front" autoplay muted playsinline></video>
-
-  <!-- 후면 카메라 (핸드 추적용) -->
-  <video id="webcam-rear" autoplay muted playsinline></video>
-
-  <div id="app-container">
-    <div class="app-icon" id="icon1" data-app="1">🧭</div>
-    <div class="app-icon" id="icon2" data-app="2">📷</div>
-
-    <div class="app-window hidden" id="app1">
-      <div class="app-header">앱 1</div>
-      <div class="app-body">콘텐츠 영역</div>
-    </div>
-  </div>
-
-  <!-- Mediapipe Scripts -->
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-
+  <script src="https://cdn.jsdelivr.net/npm/three@0.133.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic"></script>
   <script>
-    const webcamFront = document.getElementById('webcam-front');
-    const webcamRear = document.getElementById('webcam-rear');
-    const appWindow = document.getElementById('app1');
-    const icon1 = document.getElementById('icon1');
-    const appIcons = document.querySelectorAll('.app-icon');
-
-    let currentTarget = null;
-    let isDraggingWindow = false;
-
-    // 거리 계산
-    function getDistance(p1, p2) {
-      const dx = p1.x - p2.x;
-      const dy = p1.y - p2.y;
-      return Math.sqrt(dx * dx + dy * dy);
+    let scene, camera, renderer;
+    
+    // Set up 3D scene using Three.js
+    function init() {
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      renderer = new THREE.WebGLRenderer();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+      
+      const geometry = new THREE.BoxGeometry();
+      const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+      const cube = new THREE.Mesh(geometry, material);
+      scene.add(cube);
+      
+      camera.position.z = 5;
+      
+      animate();
     }
 
-    // 화면 좌표계 변환
-    function toScreenCoords(landmark) {
-      return {
-        x: landmark.x * window.innerWidth,
-        y: landmark.y * window.innerHeight
-      };
+    // Animation loop
+    function animate() {
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
     }
 
-    // 시선이 머무르는 아이콘 찾기
-    function getFocusedIcon(screenPos) {
-      let found = null;
-      appIcons.forEach(icon => {
-        const rect = icon.getBoundingClientRect();
-        const within =
-          screenPos.x >= rect.left &&
-          screenPos.x <= rect.right &&
-          screenPos.y >= rect.top &&
-          screenPos.y <= rect.bottom;
-
-        icon.classList.toggle("highlight", within);
-
-        if (within) found = icon;
+    // Mediapipe Hand Gesture Recognition (핀치 제스처 등)
+    function setupHandTracking() {
+      const hands = new Hands();
+      hands.setOptions({
+        maxNumHands: 1,
+        modelComplexity: 1,
       });
-      return found;
+      
+      hands.onResults(results => {
+        if (results.multiHandLandmarks) {
+          // 핀치 제스처 처리 예시
+          const pinch = results.multiHandLandmarks[0]; // 첫 번째 손을 기준으로
+          // 핀치 제스처에 대한 로직 구현
+        }
+      });
+
+      // Start video capture and hand tracking
+      const video = document.createElement('video');
+      video.width = 640;
+      video.height = 480;
+      document.body.appendChild(video);
+      
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then(stream => {
+          video.srcObject = stream;
+          video.play();
+          hands.send({ image: video });
+        });
     }
 
-    // Mediapipe 핸드 모델
-    const hands = new Hands({
-      locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-    });
-
-    hands.setOptions({
-      maxNumHands: 1,
-      modelComplexity: 1,
-      minDetectionConfidence: 0.7,
-      minTrackingConfidence: 0.7
-    });
-
-    hands.onResults(results => {
-      if (!results.multiHandLandmarks || !results.multiHandLandmarks.length) {
-        isDraggingWindow = false;
-        return;
-      }
-
-      const hand = results.multiHandLandmarks[0];
-      const isPinching = getDistance(hand[4], hand[8]) < 0.05;
-
-      const indexScreen = toScreenCoords(hand[8]);
-
-      if (isPinching) {
-        if (currentTarget) {
-          appWindow.classList.remove("hidden");
-        } else if (!appWindow.classList.contains("hidden")) {
-          // 핀치 중 → 앱 드래그
-          appWindow.style.left = `${indexScreen.x - 150}px`;
-          appWindow.style.top = `${indexScreen.y - 40}px`;
-        }
-      }
-    });
-
-    // Mediapipe 얼굴 모델
-    const face = new FaceMesh({
-      locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
-    });
-
-    face.setOptions({
-      maxNumFaces: 1,
-      refineLandmarks: true,
-      minDetectionConfidence: 0.6,
-      minTrackingConfidence: 0.6
-    });
-
-    face.onResults(results => {
-      if (!results.multiFaceLandmarks || !results.multiFaceLandmarks.length) {
-        currentTarget = null;
-        return;
-      }
-
-      const faceLandmarks = results.multiFaceLandmarks[0];
-      const rightEye = faceLandmarks[468]; // 오른쪽 눈 중앙쯤
-      const eyePos = toScreenCoords(rightEye);
-      currentTarget = getFocusedIcon(eyePos);
-    });
-
-    // 전면 카메라 스트림 설정 (시선 추적용)
-    navigator.mediaDevices.enumerateDevices().then(devices => {
-      const frontCamera = devices.find(device => device.kind === 'videoinput' && device.label.includes('front'));
-      if (frontCamera) {
-        navigator.mediaDevices.getUserMedia({
-          video: { deviceId: frontCamera.deviceId }
-        }).then(stream => {
-          webcamFront.srcObject = stream;
-
-          // Mediapipe에서 전면 카메라 스트림 사용 (FaceMesh용)
-          const cameraFront = new Camera(webcamFront, {
-            onFrame: async () => {
-              await face.send({ image: webcamFront });
-            },
-            width: 640,
-            height: 480
-          });
-          cameraFront.start();
-        }).catch(err => {
-          alert("전면 카메라 오류: " + err.message);
-        });
-      } else {
-        alert("전면 카메라를 찾을 수 없습니다.");
-      }
-    });
-
-    // 후면 카메라 스트림 설정 (핸드 추적용)
-    navigator.mediaDevices.enumerateDevices().then(devices => {
-      const rearCamera = devices.find(device => device.kind === 'videoinput' && device.label.includes('back'));
-      if (rearCamera) {
-        navigator.mediaDevices.getUserMedia({
-          video: { deviceId: rearCamera.deviceId }
-        }).then(stream => {
-          webcamRear.srcObject = stream;
-
-          // Mediapipe에서 후면 카메라 스트림 사용 (Hands용)
-          const cameraRear = new Camera(webcamRear, {
-            onFrame: async () => {
-              await hands.send({ image: webcamRear });
-            },
-            width: 640,
-            height: 480
-          });
-          cameraRear.start();
-        }).catch(err => {
-          alert("후면 카메라 오류: " + err.message);
-        });
-      } else {
-        alert("후면 카메라를 찾을 수 없습니다.");
-      }
-    });
+    window.onload = function() {
+      init();
+      setupHandTracking();
+    };
   </script>
 </body>
 </html>
