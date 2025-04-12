@@ -231,7 +231,11 @@
             height: 480
           });
           cameraFront.start();
-        }).catch(err => console.error("전면 카메라 오류:", err));
+        }).catch(err => {
+          alert("전면 카메라 오류: " + err.message);
+        });
+      } else {
+        alert("전면 카메라를 찾을 수 없습니다.");
       }
     });
 
@@ -253,7 +257,11 @@
             height: 480
           });
           cameraRear.start();
-        }).catch(err => console.error("후면 카메라 오류:", err));
+        }).catch(err => {
+          alert("후면 카메라 오류: " + err.message);
+        });
+      } else {
+        alert("후면 카메라를 찾을 수 없습니다.");
       }
     });
   </script>
