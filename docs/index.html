@@ -1,193 +1,79 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VisionOS 스타일 MR 앱</title>
+  <title>Vision OS 느낌 인터페이스</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: Arial, sans-serif;
-      background-color: #f0f0f5;
-      color: #333;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      flex-direction: column;
-    }
-
-    .container {
-      position: relative;
-      width: 100%;
-      height: 80%;
-      background-color: #fff;
-      border-radius: 16px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    }
-
-    .bottom-bar {
-      position: absolute;
-      bottom: 0;
-      width: 100%;
-      height: 50px;
-      background-color: #6200ea;
-      border-radius: 12px 12px 0 0;
-      cursor: grab;
-    }
-
-    .content {
-      height: 100%;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      font-size: 2rem;
-      color: #333;
-    }
-
-    canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-    }
+    body { margin: 0; overflow: hidden; background: black; }
+    canvas { display: block; }
   </style>
 </head>
 <body>
+  <video id="input_video" style="display:none;"></video>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
-  <div class="container">
-    <div class="content">
-      <p>VisionOS 스타일 MR 앱</p>
-    </div>
-    <div class="bottom-bar" id="bottom-bar"></div>
-  </div>
-
-  <canvas id="canvas"></canvas>
-
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/handtracking"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh"></script>
   <script>
-    const videoElement = document.createElement('video');
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    const bottomBar = document.getElementById('bottom-bar');
-    let dragging = false;
-    let startY = 0;
-    let currentY = 0;
+    // Three.js 씬 구성
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.1, 1000);
+    camera.position.z = 5;
 
-    // Mediapipe 설정 (손 추적과 얼굴 추적)
-    const hands = new Hands({
-      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // 반투명한 카드 만들기
+    const geometry = new THREE.PlaneGeometry(2, 1);
+    const material = new THREE.MeshPhysicalMaterial({
+      color: 0xffffff,
+      opacity: 0.2,
+      transparent: true,
+      roughness: 0.1,
+      metalness: 0.8,
+      transmission: 1, // 유리 느낌
+      clearcoat: 1.0,
+    });
+    const card = new THREE.Mesh(geometry, material);
+    scene.add(card);
+
+    // Mediapipe 손 인식 세팅
+    const videoElement = document.getElementById('input_video');
+    const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.5
     });
 
-    const faceMesh = new FaceMesh({
-      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
-    });
-
-    hands.onResults((results) => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      if (results.multiHandLandmarks) {
-        results.multiHandLandmarks.forEach((landmarks) => {
-          drawHandLandmarks(ctx, landmarks);
-          checkPinchGesture(landmarks);
-        });
+    hands.onResults(results => {
+      if (results.multiHandLandmarks.length > 0) {
+        const hand = results.multiHandLandmarks[0];
+        const indexFingerTip = hand[8]; // 검지 끝
+        const x = (indexFingerTip.x - 0.5) * 6;
+        const y = -(indexFingerTip.y - 0.5) * 4;
+        card.position.x = x;
+        card.position.y = y;
       }
     });
 
-    faceMesh.onResults((results) => {
-      if (results.multiFaceLandmarks) {
-        results.multiFaceLandmarks.forEach((landmarks) => {
-          drawFaceLandmarks(ctx, landmarks);
-        });
-      }
+    const cameraMediapipe = new Camera(videoElement, {
+      onFrame: async () => await hands.send({image: videoElement}),
+      width: 640,
+      height: 480
     });
+    cameraMediapipe.start();
 
-    // 비디오 스트림 시작
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
-      .then((stream) => {
-        videoElement.srcObject = stream;
-        videoElement.play();
-        hands.send({ image: videoElement });
-        faceMesh.send({ image: videoElement });
-      });
-
-    // 손 랜드마크 그리기
-    function drawHandLandmarks(ctx, landmarks) {
-      const width = canvas.width;
-      const height = canvas.height;
-
-      landmarks.forEach((landmark) => {
-        const x = landmark.x * width;
-        const y = landmark.y * height;
-        ctx.beginPath();
-        ctx.arc(x, y, 5, 0, 2 * Math.PI);
-        ctx.fillStyle = 'red';
-        ctx.fill();
-      });
+    function animate() {
+      requestAnimationFrame(animate);
+      card.rotation.y += 0.005;
+      renderer.render(scene, camera);
     }
 
-    // 얼굴 랜드마크 그리기
-    function drawFaceLandmarks(ctx, landmarks) {
-      const width = canvas.width;
-      const height = canvas.height;
-
-      landmarks.forEach((landmark) => {
-        const x = landmark.x * width;
-        const y = landmark.y * height;
-        ctx.beginPath();
-        ctx.arc(x, y, 5, 0, 2 * Math.PI);
-        ctx.fillStyle = 'blue';
-        ctx.fill();
-      });
-    }
-
-    // 핀치 제스처 체크
-    function checkPinchGesture(landmarks) {
-      const thumbTip = landmarks[4]; // 엄지손톱
-      const indexTip = landmarks[8]; // 검지 손톱
-      const distance = Math.sqrt(Math.pow(indexTip.x - thumbTip.x, 2) + Math.pow(indexTip.y - thumbTip.y, 2));
-
-      if (distance < 0.05) {
-        console.log("핀치 제스처 감지!");
-        // 핀치 제스처 발생 시, 하단 바 드래그 활성화
-        bottomBar.style.cursor = 'grabbing';
-        dragging = true;
-      } else {
-        if (dragging) {
-          // 핀치 제스처가 떨어지면 드래그 비활성화
-          dragging = false;
-          bottomBar.style.cursor = 'grab';
-        }
-      }
-    }
-
-    // 하단 바 드래그 기능 구현
-    bottomBar.addEventListener('mousedown', (e) => {
-      if (dragging) {
-        startY = e.clientY;
-        document.addEventListener('mousemove', dragBottomBar);
-        document.addEventListener('mouseup', stopDrag);
-      }
-    });
-
-    function dragBottomBar(e) {
-      const offsetY = e.clientY - startY;
-      currentY += offsetY;
-      bottomBar.style.transform = `translateY(${currentY}px)`;
-      startY = e.clientY;
-    }
-
-    function stopDrag() {
-      document.removeEventListener('mousemove', dragBottomBar);
-      document.removeEventListener('mouseup', stopDrag);
-    }
+    animate();
   </script>
 </body>
 </html>
