@@ -3,111 +3,103 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>VisionOS Style Web</title>
+  <title>VisionOS Hand Tracking</title>
   <style>
-    * {
-      box-sizing: border-box;
+    body, html {
       margin: 0;
       padding: 0;
-    }
-    html, body {
-      height: 100%;
       overflow: hidden;
       font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      background: radial-gradient(circle at center, #1e1e1e, #000);
+      background: black;
     }
-    .glass-card {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      backdrop-filter: blur(20px);
-      background: rgba(255, 255, 255, 0.1);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      border-radius: 20px;
-      padding: 40px;
-      text-align: center;
-      color: white;
-      box-shadow: 0 0 30px rgba(255, 255, 255, 0.05);
-    }
-    canvas {
-      position: absolute;
+    #video {
+      position: fixed;
       top: 0;
       left: 0;
-      z-index: -1;
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+      z-index: -2;
+      transform: scaleX(-1); /* 셀카처럼 뒤집기 */
+    }
+    .app-window {
+      position: absolute;
+      top: 30%;
+      left: 30%;
+      width: 300px;
+      height: 200px;
+      backdrop-filter: blur(20px);
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 20px;
+      color: white;
+      padding: 20px;
+      box-shadow: 0 0 30px rgba(255, 255, 255, 0.1);
+      transition: transform 0.1s linear;
+      touch-action: none;
     }
   </style>
 </head>
 <body>
-  <div class="glass-card">
-    <h1>🍎 VisionOS 스타일!</h1>
-    <p>iPhone에서도 이 정도는 돼야지~</p>
-  </div>
+  <video id="video" autoplay muted playsinline></video>
+  <div id="app" class="app-window">📱 VisionOS 앱 창</div>
 
-  <canvas id="three-canvas"></canvas>
-
-  <!-- Three.js -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-
-  <!-- MediaPipe FaceMesh -->
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.min.js"></script>
+  <!-- MediaPipe Hands -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-
   <script>
-    // 🌌 Three.js 배경
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('three-canvas'), alpha: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    const geometry = new THREE.TorusKnotGeometry(1, 0.3, 100, 16);
-    const material = new THREE.MeshStandardMaterial({ color: 0x44aaff, roughness: 0.3, metalness: 1 });
-    const torusKnot = new THREE.Mesh(geometry, material);
-    scene.add(torusKnot);
+    const video = document.getElementById('video');
+    const app = document.getElementById('app');
+    let isPinching = false;
+    let offsetX = 0, offsetY = 0;
 
-    const light = new THREE.PointLight(0xffffff, 1);
-    light.position.set(5, 5, 5);
-    scene.add(light);
-
-    camera.position.z = 4;
-
-    function animate() {
-      requestAnimationFrame(animate);
-      torusKnot.rotation.x += 0.01;
-      torusKnot.rotation.y += 0.01;
-      renderer.render(scene, camera);
-    }
-    animate();
-
-    // 🧠 MediaPipe 얼굴 트래킹 (카메라 연결 & 로드만 해둠)
-    const videoElement = document.createElement('video');
-    videoElement.style.display = 'none';
-    document.body.appendChild(videoElement);
-
-    const faceMesh = new FaceMesh({
-      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
-    });
-    faceMesh.setOptions({
-      maxNumFaces: 1,
-      refineLandmarks: true,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
     });
 
-    faceMesh.onResults((results) => {
-      if (results.multiFaceLandmarks.length > 0) {
-        // 여기에 얼굴 인식 후 효과나 인터랙션 추가하면 돼!
-        console.log("얼굴이 보여요 👀");
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.7,
+    });
+
+    hands.onResults((results) => {
+      if (results.multiHandLandmarks.length > 0) {
+        const landmarks = results.multiHandLandmarks[0];
+
+        const [thumbTip, indexTip] = [landmarks[4], landmarks[8]];
+        const pinchDist = Math.hypot(
+          thumbTip.x - indexTip.x,
+          thumbTip.y - indexTip.y
+        );
+
+        if (pinchDist < 0.05) {
+          const pinchX = indexTip.x * window.innerWidth;
+          const pinchY = indexTip.y * window.innerHeight;
+
+          if (!isPinching) {
+            isPinching = true;
+            offsetX = pinchX - app.offsetLeft;
+            offsetY = pinchY - app.offsetTop;
+          }
+
+          app.style.left = `${pinchX - offsetX}px`;
+          app.style.top = `${pinchY - offsetY}px`;
+        } else {
+          isPinching = false;
+        }
       }
     });
 
-    const cameraUtils = new Camera(videoElement, {
+    const camera = new Camera(video, {
       onFrame: async () => {
-        await faceMesh.send({ image: videoElement });
+        await hands.send({ image: video });
       },
       width: 640,
       height: 480
     });
-    cameraUtils.start();
+    camera.start();
   </script>
 </body>
 </html>
