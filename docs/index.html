@@ -2,120 +2,83 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>VisionOS 핀치 앱 이동</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="LiquidGlassApp" />
+  <title>Liquid Glass UI</title>
+  <link rel="apple-touch-icon" href="icon.png" />
   <style>
-    html, body {
+    * {
       margin: 0;
       padding: 0;
-      overflow: hidden;
-      background: black;
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      box-sizing: border-box;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     }
-    #video {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      object-fit: cover;
-      z-index: -2;
-      transform: scaleX(-1); /* 거울 모드 OFF: 후면카메라는 유지 */
-    }
-    .app-window {
-      position: absolute;
-      top: 30%;
-      left: 30%;
-      width: 300px;
-      height: 200px;
-      backdrop-filter: blur(20px);
-      background: rgba(255, 255, 255, 0.1);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      border-radius: 20px;
-      color: white;
+
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #d4f0ff, #c1d3ff);
+      display: flex;
+      justify-content: center;
+      align-items: center;
       padding: 20px;
-      box-shadow: 0 0 30px rgba(255, 255, 255, 0.1);
-      touch-action: none;
-      transition: transform 0.1s linear;
+    }
+
+    .glass-card {
+      width: 90%;
+      max-width: 400px;
+      padding: 2rem;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 1.5rem;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      backdrop-filter: blur(16px) saturate(180%);
+      -webkit-backdrop-filter: blur(16px) saturate(180%);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      text-align: center;
+    }
+
+    .glass-card h1 {
+      font-size: 1.8rem;
+      color: #ffffff;
+      margin-bottom: 1rem;
+      text-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+    }
+
+    .glass-card p {
+      color: #f0f0f0;
+      font-size: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .glass-card button {
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      border: none;
+      border-radius: 1rem;
+      background: rgba(255, 255, 255, 0.25);
+      color: #fff;
+      cursor: pointer;
+      transition: background 0.3s ease;
+      backdrop-filter: blur(8px);
+    }
+
+    .glass-card button:hover {
+      background: rgba(255, 255, 255, 0.4);
     }
   </style>
 </head>
 <body>
-  <video id="video" autoplay muted playsinline></video>
-  <div id="app" class="app-window">📱 앱 창을 핀치해서 움직여보세요!</div>
-
-  <!-- MediaPipe Hands -->
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <div class="glass-card">
+    <h1>🧊 Liquid Glass</h1>
+    <p>이건 애플 느낌 나는 블러리 글래스 UI 예제야. 너무 차가우면 감기 조심~</p>
+    <button onclick="sayHi()">눌러봐요</button>
+  </div>
 
   <script>
-    const video = document.getElementById("video");
-    const app = document.getElementById("app");
-
-    let isPinching = false;
-    let offsetX = 0, offsetY = 0;
-
-    const hands = new Hands({
-      locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-    });
-
-    hands.setOptions({
-      maxNumHands: 1,
-      modelComplexity: 1,
-      minDetectionConfidence: 0.7,
-      minTrackingConfidence: 0.7,
-    });
-
-    hands.onResults(results => {
-      if (results.multiHandLandmarks.length > 0) {
-        const landmarks = results.multiHandLandmarks[0];
-        const [thumbTip, indexTip] = [landmarks[4], landmarks[8]];
-        const pinchDist = Math.hypot(
-          thumbTip.x - indexTip.x,
-          thumbTip.y - indexTip.y
-        );
-
-        const pinchX = indexTip.x * window.innerWidth;
-        const pinchY = indexTip.y * window.innerHeight;
-
-        if (pinchDist < 0.05) {
-          // 핀치 시작
-          if (!isPinching) {
-            isPinching = true;
-            offsetX = pinchX - app.offsetLeft;
-            offsetY = pinchY - app.offsetTop;
-          }
-
-          // 드래그
-          app.style.left = `${pinchX - offsetX}px`;
-          app.style.top = `${pinchY - offsetY}px`;
-        } else {
-          isPinching = false;
-        }
-      }
-    });
-
-    // 📸 후면 카메라로 비디오 스트림 가져오기
-    navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: { ideal: "environment" } // 후면 카메라!
-      }
-    }).then(stream => {
-      video.srcObject = stream;
-
-      const camera = new Camera(video, {
-        onFrame: async () => {
-          await hands.send({ image: video });
-        },
-        width: 640,
-        height: 480,
-      });
-
-      camera.start();
-    }).catch(err => {
-      alert("카메라 접근에 실패했어요 😢: " + err);
-      console.error(err);
-    });
+    function sayHi() {
+      alert("안녕! 🍎 글래스처럼 투명한 너의 마음을 알아버렸어!");
+    }
   </script>
 </body>
 </html>
