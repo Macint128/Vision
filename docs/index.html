@@ -2,82 +2,121 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="LiquidGlassApp" />
-  <title>Liquid Glass UI</title>
-  <link rel="apple-touch-icon" href="icon.png" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mini VisionOS with Three.js & WebXR</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    body, html {
+      margin: 0; padding: 0; overflow: hidden; background: #000;
+      font-family: 'Apple SD Gothic Neo', sans-serif;
+      color: white;
+      user-select: none;
     }
-
-    body {
-      min-height: 100vh;
-      background: linear-gradient(135deg, #d4f0ff, #c1d3ff);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      padding: 20px;
+    #info {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 10;
+      background: rgba(0,0,0,0.4);
+      padding: 10px 15px;
+      border-radius: 12px;
+      font-size: 14px;
+      max-width: 300px;
     }
-
-    .glass-card {
-      width: 90%;
-      max-width: 400px;
-      padding: 2rem;
-      background: rgba(255, 255, 255, 0.15);
-      border-radius: 1.5rem;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-      backdrop-filter: blur(16px) saturate(180%);
-      -webkit-backdrop-filter: blur(16px) saturate(180%);
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      text-align: center;
-    }
-
-    .glass-card h1 {
-      font-size: 1.8rem;
-      color: #ffffff;
-      margin-bottom: 1rem;
-      text-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
-    }
-
-    .glass-card p {
-      color: #f0f0f0;
-      font-size: 1rem;
-      margin-bottom: 1.5rem;
-    }
-
-    .glass-card button {
-      padding: 0.75rem 1.5rem;
-      font-size: 1rem;
+    #enter-ar {
+      position: absolute;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #0a84ff;
       border: none;
-      border-radius: 1rem;
-      background: rgba(255, 255, 255, 0.25);
-      color: #fff;
+      border-radius: 24px;
+      padding: 14px 30px;
+      font-size: 18px;
+      color: white;
       cursor: pointer;
+      user-select: none;
       transition: background 0.3s ease;
-      backdrop-filter: blur(8px);
+      box-shadow: 0 6px 10px rgba(10, 132, 255, 0.5);
     }
-
-    .glass-card button:hover {
-      background: rgba(255, 255, 255, 0.4);
+    #enter-ar:hover {
+      background: #005fcc;
+      box-shadow: 0 8px 16px rgba(0, 95, 204, 0.8);
     }
   </style>
 </head>
 <body>
-  <div class="glass-card">
-    <h1>🧊 Liquid Glass</h1>
-    <p>이건 애플 느낌 나는 블러리 글래스 UI 예제야. 너무 차가우면 감기 조심~</p>
-    <button onclick="sayHi()">눌러봐요</button>
+  <div id="info">
+    <h2>Mini VisionOS</h2>
+    <p>애플 VisionOS 느낌의 WebXR AR 데모</p>
+    <p>아래 버튼 눌러서 AR 모드 진입!</p>
   </div>
+  <button id="enter-ar">Enter AR</button>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/webxr/ARButton.js"></script>
 
   <script>
-    function sayHi() {
-      alert("안녕! 🍎 글래스처럼 투명한 너의 마음을 알아버렸어!");
+    let camera, scene, renderer;
+    let controller;
+
+    init();
+    function init() {
+      // 씬과 카메라 세팅
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.01, 20);
+
+      // 조명 넣기 (visionOS는 은은하니까)
+      const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+      light.position.set(0.5, 1, 0.25);
+      scene.add(light);
+
+      // 렌더러
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.xr.enabled = true;
+      document.body.appendChild(renderer.domElement);
+
+      // 간단한 3D UI 오브젝트 - 반투명한 구
+      const geometry = new THREE.SphereGeometry(0.1, 32, 32);
+      const material = new THREE.MeshStandardMaterial({ color: 0x0a84ff, transparent: true, opacity: 0.7, roughness: 0.3, metalness: 0.5 });
+      const sphere = new THREE.Mesh(geometry, material);
+      sphere.position.set(0, 0, -0.5);
+      scene.add(sphere);
+
+      // 컨트롤러 (터치/탭 인식용)
+      controller = renderer.xr.getController(0);
+      controller.addEventListener('select', () => {
+        alert('VisionOS 스타일 AR에서 터치! 🎉');
+      });
+      scene.add(controller);
+
+      // AR 버튼 직접 커스텀 (WebXR API에서 자동 버튼 가져오기 대신)
+      const enterARBtn = document.getElementById('enter-ar');
+      enterARBtn.addEventListener('click', () => {
+        navigator.xr.requestSession('immersive-ar', {
+          requiredFeatures: ['hit-test', 'dom-overlay'],
+          domOverlay: { root: document.body }
+        }).then(session => {
+          renderer.xr.setSession(session);
+          enterARBtn.style.display = 'none';
+        }).catch(err => {
+          alert('AR Session 시작 실패: ' + err);
+        });
+      });
+
+      window.addEventListener('resize', onWindowResize);
+      renderer.setAnimationLoop(render);
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth/window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function render(timestamp, frame) {
+      // 여기서 필요한 XR 프레임 처리 가능
+      renderer.render(scene, camera);
     }
   </script>
 </body>
