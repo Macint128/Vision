@@ -2,10 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="VisionSim OS" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>VisionSim OS</title>
   <style>
     html, body {
@@ -16,52 +13,27 @@
       font-family: -apple-system, sans-serif;
     }
 
-    #boot-screen {
+    video#camera {
       position: fixed;
-      inset: 0;
-      background: black;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      animation: fadeOut 2s ease-in-out 3s forwards;
-      z-index: 10;
-    }
-
-    @keyframes fadeOut {
-      to { opacity: 0; visibility: hidden; }
-    }
-
-    #boot-logo {
-      width: 100px;
-      height: 100px;
-      border-radius: 50%;
-      background: radial-gradient(circle, #fff, #888);
-      animation: pulse 2s ease-in-out infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.2); }
-    }
-
-    #camera-view {
-      position: fixed;
-      inset: 0;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
       object-fit: cover;
       z-index: 0;
+      transform: scaleX(-1); /* 좌우 반전 */
     }
 
-    #app-icons {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      display: flex;
-      gap: 20px;
-      z-index: 2;
+    canvas#overlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 1;
+      pointer-events: none;
     }
 
     .icon {
+      position: absolute;
       width: 80px;
       height: 80px;
       border-radius: 50%;
@@ -72,75 +44,113 @@
       align-items: center;
       color: white;
       font-weight: bold;
-      cursor: pointer;
-      transition: transform 0.2s ease, background 0.3s;
+      font-size: 1.5rem;
+      z-index: 2;
+      transition: transform 0.2s, background 0.2s;
     }
 
-    .icon:hover {
-      background: rgba(255,255,255,0.4);
-      transform: scale(1.1);
-    }
-
-    /* 터치/핀치 기능용 */
-    .draggable {
-      touch-action: none;
+    .icon.hovered {
+      background: rgba(255,255,255,0.5);
+      transform: scale(1.2);
     }
   </style>
 </head>
 <body>
 
-  <!-- 부팅화면 -->
-  <div id="boot-screen">
-    <div id="boot-logo"></div>
-    <audio id="boot-sound" src="visionsim_boot.mp3" autoplay></audio>
-  </div>
-
-  <!-- 카메라 뷰 -->
-  <video id="camera-view" autoplay playsinline muted></video>
+  <video id="camera" autoplay playsinline muted></video>
+  <canvas id="overlay"></canvas>
 
   <!-- 앱 아이콘 -->
-  <div id="app-icons">
-    <div class="icon draggable" ontouchstart="">📸</div>
-    <div class="icon draggable" ontouchstart="">🌐</div>
-    <div class="icon draggable" ontouchstart="">⚙️</div>
-  </div>
+  <div id="icon1" class="icon" style="top: 30%; left: 40%;">📸</div>
+  <div id="icon2" class="icon" style="top: 30%; left: 60%;">🌐</div>
+
+  <!-- MediaPipe -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
 
   <script>
-    // 카메라 연결
-    const video = document.getElementById("camera-view");
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false })
-      .then(stream => {
-        video.srcObject = stream;
-      }).catch(err => {
-        alert("카메라 접근 실패 😢: " + err);
-      });
+    const videoElement = document.getElementById('camera');
+    const canvasElement = document.getElementById('overlay');
+    const canvasCtx = canvasElement.getContext('2d');
 
-    // 핀치 제스처 및 드래그
-    let activeEl = null;
-    let offsetX = 0, offsetY = 0;
+    const icons = [
+      document.getElementById('icon1'),
+      document.getElementById('icon2')
+    ];
 
-    document.querySelectorAll('.draggable').forEach(icon => {
-      icon.addEventListener('touchstart', e => {
-        const touch = e.touches[0];
-        activeEl = icon;
-        const rect = icon.getBoundingClientRect();
-        offsetX = touch.clientX - rect.left;
-        offsetY = touch.clientY - rect.top;
-      });
+    function getIconCenter(icon) {
+      const rect = icon.getBoundingClientRect();
+      return {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2
+      };
+    }
 
-      document.addEventListener('touchmove', e => {
-        if (!activeEl) return;
-        e.preventDefault();
-        const touch = e.touches[0];
-        activeEl.style.position = 'absolute';
-        activeEl.style.left = (touch.clientX - offsetX) + 'px';
-        activeEl.style.top = (touch.clientY - offsetY) + 'px';
-      });
+    function checkHover(landmark, icon) {
+      const handX = landmark.x * window.innerWidth;
+      const handY = landmark.y * window.innerHeight;
+      const {x, y} = getIconCenter(icon);
+      const dx = handX - x;
+      const dy = handY - y;
+      return Math.sqrt(dx * dx + dy * dy) < 50;
+    }
 
-      document.addEventListener('touchend', () => {
-        activeEl = null;
-      });
+    const hands = new Hands({
+      locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
     });
+
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.7
+    });
+
+    hands.onResults(results => {
+      canvasCtx.save();
+      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+      if (results.multiHandLandmarks.length > 0) {
+        const landmarks = results.multiHandLandmarks[0];
+
+        drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: '#00FF00', lineWidth: 2});
+        drawLandmarks(canvasCtx, landmarks, {color: '#00FF00', lineWidth: 1});
+
+        // 엄지와 검지 거리
+        const pinchDist = Math.hypot(
+          landmarks[4].x - landmarks[8].x,
+          landmarks[4].y - landmarks[8].y
+        );
+
+        icons.forEach(icon => {
+          const isHover = checkHover(landmarks[8], icon);
+          icon.classList.toggle("hovered", isHover);
+          if (isHover && pinchDist < 0.03) {
+            icon.style.transform = "scale(1.5)";
+          }
+        });
+      }
+
+      canvasCtx.restore();
+    });
+
+    const camera = new Camera(videoElement, {
+      onFrame: async () => {
+        await hands.send({image: videoElement});
+      },
+      width: 1280,
+      height: 720
+    });
+    camera.start();
+
+    // Resize canvas
+    window.addEventListener('resize', () => {
+      canvasElement.width = window.innerWidth;
+      canvasElement.height = window.innerHeight;
+    });
+    canvasElement.width = window.innerWidth;
+    canvasElement.height = window.innerHeight;
   </script>
 </body>
 </html>
