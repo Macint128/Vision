@@ -2,122 +2,145 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Mini VisionOS with Three.js & WebXR</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="VisionSim OS" />
+  <title>VisionSim OS</title>
   <style>
-    body, html {
-      margin: 0; padding: 0; overflow: hidden; background: #000;
-      font-family: 'Apple SD Gothic Neo', sans-serif;
-      color: white;
-      user-select: none;
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: black;
+      font-family: -apple-system, sans-serif;
     }
-    #info {
-      position: absolute;
-      top: 20px;
-      left: 20px;
+
+    #boot-screen {
+      position: fixed;
+      inset: 0;
+      background: black;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      animation: fadeOut 2s ease-in-out 3s forwards;
       z-index: 10;
-      background: rgba(0,0,0,0.4);
-      padding: 10px 15px;
-      border-radius: 12px;
-      font-size: 14px;
-      max-width: 300px;
     }
-    #enter-ar {
+
+    @keyframes fadeOut {
+      to { opacity: 0; visibility: hidden; }
+    }
+
+    #boot-logo {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #fff, #888);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.2); }
+    }
+
+    #camera-view {
+      position: fixed;
+      inset: 0;
+      object-fit: cover;
+      z-index: 0;
+    }
+
+    #app-icons {
       position: absolute;
-      bottom: 40px;
+      top: 50%;
       left: 50%;
-      transform: translateX(-50%);
-      background: #0a84ff;
-      border: none;
-      border-radius: 24px;
-      padding: 14px 30px;
-      font-size: 18px;
-      color: white;
-      cursor: pointer;
-      user-select: none;
-      transition: background 0.3s ease;
-      box-shadow: 0 6px 10px rgba(10, 132, 255, 0.5);
+      transform: translate(-50%, -50%);
+      display: flex;
+      gap: 20px;
+      z-index: 2;
     }
-    #enter-ar:hover {
-      background: #005fcc;
-      box-shadow: 0 8px 16px rgba(0, 95, 204, 0.8);
+
+    .icon {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.2);
+      backdrop-filter: blur(8px);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      transition: transform 0.2s ease, background 0.3s;
+    }
+
+    .icon:hover {
+      background: rgba(255,255,255,0.4);
+      transform: scale(1.1);
+    }
+
+    /* 터치/핀치 기능용 */
+    .draggable {
+      touch-action: none;
     }
   </style>
 </head>
 <body>
-  <div id="info">
-    <h2>Mini VisionOS</h2>
-    <p>애플 VisionOS 느낌의 WebXR AR 데모</p>
-    <p>아래 버튼 눌러서 AR 모드 진입!</p>
-  </div>
-  <button id="enter-ar">Enter AR</button>
 
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/webxr/ARButton.js"></script>
+  <!-- 부팅화면 -->
+  <div id="boot-screen">
+    <div id="boot-logo"></div>
+    <audio id="boot-sound" src="visionsim_boot.mp3" autoplay></audio>
+  </div>
+
+  <!-- 카메라 뷰 -->
+  <video id="camera-view" autoplay playsinline muted></video>
+
+  <!-- 앱 아이콘 -->
+  <div id="app-icons">
+    <div class="icon draggable" ontouchstart="">📸</div>
+    <div class="icon draggable" ontouchstart="">🌐</div>
+    <div class="icon draggable" ontouchstart="">⚙️</div>
+  </div>
 
   <script>
-    let camera, scene, renderer;
-    let controller;
-
-    init();
-    function init() {
-      // 씬과 카메라 세팅
-      scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.01, 20);
-
-      // 조명 넣기 (visionOS는 은은하니까)
-      const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
-      light.position.set(0.5, 1, 0.25);
-      scene.add(light);
-
-      // 렌더러
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.xr.enabled = true;
-      document.body.appendChild(renderer.domElement);
-
-      // 간단한 3D UI 오브젝트 - 반투명한 구
-      const geometry = new THREE.SphereGeometry(0.1, 32, 32);
-      const material = new THREE.MeshStandardMaterial({ color: 0x0a84ff, transparent: true, opacity: 0.7, roughness: 0.3, metalness: 0.5 });
-      const sphere = new THREE.Mesh(geometry, material);
-      sphere.position.set(0, 0, -0.5);
-      scene.add(sphere);
-
-      // 컨트롤러 (터치/탭 인식용)
-      controller = renderer.xr.getController(0);
-      controller.addEventListener('select', () => {
-        alert('VisionOS 스타일 AR에서 터치! 🎉');
-      });
-      scene.add(controller);
-
-      // AR 버튼 직접 커스텀 (WebXR API에서 자동 버튼 가져오기 대신)
-      const enterARBtn = document.getElementById('enter-ar');
-      enterARBtn.addEventListener('click', () => {
-        navigator.xr.requestSession('immersive-ar', {
-          requiredFeatures: ['hit-test', 'dom-overlay'],
-          domOverlay: { root: document.body }
-        }).then(session => {
-          renderer.xr.setSession(session);
-          enterARBtn.style.display = 'none';
-        }).catch(err => {
-          alert('AR Session 시작 실패: ' + err);
-        });
+    // 카메라 연결
+    const video = document.getElementById("camera-view");
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false })
+      .then(stream => {
+        video.srcObject = stream;
+      }).catch(err => {
+        alert("카메라 접근 실패 😢: " + err);
       });
 
-      window.addEventListener('resize', onWindowResize);
-      renderer.setAnimationLoop(render);
-    }
+    // 핀치 제스처 및 드래그
+    let activeEl = null;
+    let offsetX = 0, offsetY = 0;
 
-    function onWindowResize() {
-      camera.aspect = window.innerWidth/window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    }
+    document.querySelectorAll('.draggable').forEach(icon => {
+      icon.addEventListener('touchstart', e => {
+        const touch = e.touches[0];
+        activeEl = icon;
+        const rect = icon.getBoundingClientRect();
+        offsetX = touch.clientX - rect.left;
+        offsetY = touch.clientY - rect.top;
+      });
 
-    function render(timestamp, frame) {
-      // 여기서 필요한 XR 프레임 처리 가능
-      renderer.render(scene, camera);
-    }
+      document.addEventListener('touchmove', e => {
+        if (!activeEl) return;
+        e.preventDefault();
+        const touch = e.touches[0];
+        activeEl.style.position = 'absolute';
+        activeEl.style.left = (touch.clientX - offsetX) + 'px';
+        activeEl.style.top = (touch.clientY - offsetY) + 'px';
+      });
+
+      document.addEventListener('touchend', () => {
+        activeEl = null;
+      });
+    });
   </script>
 </body>
 </html>
